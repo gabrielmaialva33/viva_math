@@ -65,8 +65,20 @@ pub fn length_squared(v: VecN) -> Float {
   list.fold(v, 0.0, fn(acc, x) { acc +. x *. x })
 }
 
+/// Length using progressive `hypot` reduction to avoid overflow.
 pub fn length(v: VecN) -> Float {
-  scalar.sqrt(length_squared(v))
+  case v {
+    [] -> 0.0
+    [x] -> scalar.safe_sqrt(x *. x)
+    [a, b, ..rest] -> length_hypot(rest, scalar.hypot(a, b))
+  }
+}
+
+fn length_hypot(rest: List(Float), acc: Float) -> Float {
+  case rest {
+    [] -> acc
+    [x, ..tail] -> length_hypot(tail, scalar.hypot(acc, x))
+  }
 }
 
 pub fn distance(a: VecN, b: VecN) -> Result(Float, Nil) {

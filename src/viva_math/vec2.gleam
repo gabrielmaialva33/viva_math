@@ -51,8 +51,9 @@ pub fn length_squared(v: Vec2) -> Float {
   dot(v, v)
 }
 
+/// Length √(x² + y²) — uses `hypot` to avoid overflow/underflow at extreme scales.
 pub fn length(v: Vec2) -> Float {
-  scalar.sqrt(length_squared(v))
+  scalar.hypot(v.x, v.y)
 }
 
 pub fn distance(a: Vec2, b: Vec2) -> Float {
