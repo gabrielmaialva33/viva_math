@@ -171,14 +171,10 @@ pub fn iglu_approx_close_to_iglu_test() {
 // ============================================================================
 
 pub fn dop853_exp_single_step_test() {
-  // dx/dt = x, x(0) = 1 → x(0.1) = e^0.1 ≈ 1.1051709180756477
-  // DOP853 in one step should be very close.
   let f = fn(_t: Float, x: Float) { x }
   let #(x_new, err) = ode.dop853(f, 0.0, 1.0, 0.1)
   let expected = 1.1051709180756477
-  // Order-8 method on dt=0.1: error should be ~10^-10 or smaller.
-  should.be_true(approx(x_new, expected, 1.0e-10))
-  // The embedded error estimator should be small but finite.
+  should.equal(x_new, expected)
   should.be_true(err >=. 0.0)
 }
 

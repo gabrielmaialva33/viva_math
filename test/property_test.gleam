@@ -45,11 +45,7 @@ pub fn property_sign_consistency_test() {
   // sign(x) * |x| = x
   let xs = [-7.0, -1.5, 0.0, 1.5, 7.0]
   list.each(xs, fn(x) {
-    should.be_true(approx(
-      scalar.sign(x) *. float.absolute_value(x),
-      x,
-      tight,
-    ))
+    should.be_true(approx(scalar.sign(x) *. float.absolute_value(x), x, tight))
   })
 }
 
@@ -414,9 +410,7 @@ pub fn property_random_uniform_in_range_test() {
   // Draw many samples — all should land in [0, 1)
   let seed = random.from_int(7)
   let #(samples, _) = random.uniforms(seed, 1000)
-  list.each(samples, fn(x) {
-    should.be_true(x >=. 0.0 && x <. 1.0)
-  })
+  list.each(samples, fn(x) { should.be_true(x >=. 0.0 && x <. 1.0) })
 }
 
 pub fn property_random_normal_zero_finite_test() {

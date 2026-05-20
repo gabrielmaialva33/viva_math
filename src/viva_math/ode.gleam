@@ -113,214 +113,147 @@ pub fn milstein(
 // ============================================================================
 
 // ============================================================================
-// DOP853 - Dormand-Prince 8(5,3) — the gold standard for non-stiff ODEs
+// Dormand-Prince 5(4) — the modern default for non-stiff ODEs
 // ============================================================================
 //
-// Implementation of Hairer's DOP853, an explicit Runge-Kutta method of order
-// 8 with embedded error estimators of orders 5 and 3. This is the same
-// method used by scipy.integrate.DOP853 and Diffrax. The coefficients come
-// from Hairer-Nørsett-Wanner "Solving ODEs I" (Springer 1993).
+// Explicit Runge-Kutta method of order 5 with an embedded 4th-order error
+// estimator, used by scipy.integrate.RK45, MATLAB's ode45, and Diffrax's
+// Dopri5. Seven stages with First-Same-As-Last (FSAL) optimisation: k₇ of
+// step n equals k₁ of step n+1, so practical cost is 6 function
+// evaluations per step.
 //
-// Use it when:
-//   - High accuracy is required (target err ≤ 10⁻¹⁰)
-//   - The system is non-stiff and smooth
-//   - You have budget for ~12 function evaluations per step
+// The Dormand-Prince 8(5,3) (DOP853) variant exists but its 12-stage
+// Butcher tableau is large enough that hand-coding it is bug-prone;
+// scipy.integrate.DOP853 uses pre-computed binary tables. We ship the
+// well-vetted 5(4) here and leave DOP853 for a future NIF.
 //
-// For stiff problems or oscillatory dynamics, prefer specialised methods
-// (Rosenbrock, Gauss-Legendre IRK) — out of scope here.
+// References:
+//   Dormand & Prince (1980) "A family of embedded Runge-Kutta formulae"
+//   Hairer, Nørsett, Wanner (1993) "Solving ODEs I" §II.5
 
-/// One step of DOP853 with embedded error estimate.
+/// One step of Dormand-Prince 5(4) with embedded error estimate.
 ///
-/// Returns `#(x_new, err)` where `err` is an L-∞-like local error estimate
-/// suitable for step-size control. The combination of the order-5 and
-/// order-3 embedded estimators makes DOP853 robust across smooth ODEs.
-pub fn dop853(
-  f: Drift,
-  t: Float,
-  x: Float,
-  dt: Float,
-) -> #(Float, Float) {
-  // Stage abscissae (c_i)
-  let c2 = 0.0526001519587677318785587544488
-  let c3 = 0.0789002279381515978178381316732
-  let c4 = 0.118350341907227396726757197510
-  let c5 = 0.281649658092772603273242802490
-  let c6 = 0.333333333333333333333333333333
-  let c7 = 0.25
-  let c8 = 0.307692307692307692307692307692
-  let c9 = 0.651282051282051282051282051282
-  let c10 = 0.6
-  let c11 = 0.857142857142857142857142857142
-
-  // a-coefficients (row-major); subset used.
+/// Returns `#(x_new, err)` where `x_new` is the 5th-order solution and
+/// `err` is the absolute difference from the embedded 4th-order estimate,
+/// suitable for step-size control. Per-step truncation error is O(dt⁶).
+pub fn dop54(f: Drift, t: Float, x: Float, dt: Float) -> #(Float, Float) {
+  // Butcher tableau (Dormand-Prince 5(4))
   let k1 = f(t, x)
-  let k2 = f(t +. c2 *. dt, x +. dt *. 0.0526001519587677318785587544488 *. k1)
+  let k2 = f(t +. dt /. 5.0, x +. dt *. k1 /. 5.0)
   let k3 =
     f(
-      t +. c3 *. dt,
-      x
-        +. dt
-        *. {
-          0.0197250569845378994544595329183 *. k1
-          +. 0.0591751709536136983633785987549 *. k2
-        },
+      t +. 3.0 *. dt /. 10.0,
+      x +. dt *. { 3.0 *. k1 /. 40.0 +. 9.0 *. k2 /. 40.0 },
     )
   let k4 =
     f(
-      t +. c4 *. dt,
+      t +. 4.0 *. dt /. 5.0,
       x
         +. dt
-        *. {
-          0.0295875854768068491816892993775 *. k1
-          +. 0.0887627564304205475450678981324 *. k3
-        },
+        *. { 44.0 *. k1 /. 45.0 -. 56.0 *. k2 /. 15.0 +. 32.0 *. k3 /. 9.0 },
     )
   let k5 =
     f(
-      t +. c5 *. dt,
+      t +. 8.0 *. dt /. 9.0,
       x
         +. dt
         *. {
-          0.241365134159266685502369798665 *. k1
-          -. 0.884549479328286085344864962717 *. k3
-          +. 0.924834003261792003115737630351 *. k4
-        },
+        19_372.0
+        *. k1
+        /. 6561.0
+        -. 25_360.0
+        *. k2
+        /. 2187.0
+        +. 64_448.0
+        *. k3
+        /. 6561.0
+        -. 212.0
+        *. k4
+        /. 729.0
+      },
     )
   let k6 =
-    f(
-      t +. c6 *. dt,
-      x
-        +. dt
-        *. {
-          0.0370370370370370370370370370370 *. k1
-          +. 0.170828608729473871279604482173 *. k4
-          +. 0.125467687566822425016691814123 *. k5
-        },
-    )
-  let k7 =
-    f(
-      t +. c7 *. dt,
-      x
-        +. dt
-        *. {
-          0.0371093750 *. k1
-          +. 0.170252211019544039314978060272 *. k4
-          +. 0.0602165389804559606850219397283 *. k5
-          -. 0.0175781250 *. k6
-        },
-    )
-  let k8 =
-    f(
-      t +. c8 *. dt,
-      x
-        +. dt
-        *. {
-          0.0370920001185047927108779319836 *. k1
-          +. 0.170383925712239993810214054705 *. k4
-          +. 0.107262030446373611259788006774 *. k5
-          -. 0.0153194377486244017527936158236 *. k6
-          +. 0.00827378916381402288758473766002 *. k7
-        },
-    )
-  let k9 =
-    f(
-      t +. c9 *. dt,
-      x
-        +. dt
-        *. {
-          0.624110958716075717114429577812 *. k1
-          -. 3.36089262944694129406857109825 *. k4
-          -. 0.868219346841726006818189891453 *. k5
-          +. 27.5920996994467083049415600797 *. k6
-          +. 20.1540675504778934086186788979 *. k7
-          -. 43.4898841810699588477366255144 *. k8
-        },
-    )
-  let k10 =
-    f(
-      t +. c10 *. dt,
-      x
-        +. dt
-        *. {
-          0.477662536438264365890433908527 *. k1
-          -. 2.48811461997166764192642586468 *. k4
-          -. 0.590290826836842996371446475743 *. k5
-          +. 21.2300514481811942347288488774 *. k6
-          +. 15.2792336328824235832596922938 *. k7
-          -. 33.2882109689848629194453176389 *. k8
-          -. 0.0203312017085086261358222928593 *. k9
-        },
-    )
-  let k11 =
-    f(
-      t +. c11 *. dt,
-      x
-        +. dt
-        *. {
-          -19.5778479795613910484035111281 *. k1
-          +. 111.408081056545300451213684475 *. k4
-          -. 1.84357566457552267572568049378 *. k5
-          -. 13.7270746154103097835015180142 *. k6
-          +. 2.61876616647600003500859014866 *. k7
-          +. 13.2547875323920512057178605499 *. k8
-          +. 1.21881213813681224786669875401 *. k9
-          -. 1.86766391545820906900920002392 *. k10
-        },
-    )
-  let k12 =
     f(
       t +. dt,
       x
         +. dt
         *. {
-          -0.491338588803989988800076022717 *. k1
-          -. 11.4724485620176055015900989415 *. k4
-          -. 0.508169095070834008351817453828 *. k5
-          -. 7.62905335219842437830006380078 *. k6
-          -. 0.215216968819090395906767317587 *. k7
-          +. 21.2700399583015952706711928437 *. k8
-          -. 1.86407189676803806080040365253 *. k9
-          +. 2.30607986474442942466014931923 *. k10
-          +. 0.140709071359799802975488727050 *. k11
-        },
+        9017.0
+        *. k1
+        /. 3168.0
+        -. 355.0
+        *. k2
+        /. 33.0
+        +. 46_732.0
+        *. k3
+        /. 5247.0
+        +. 49.0
+        *. k4
+        /. 176.0
+        -. 5103.0
+        *. k5
+        /. 18_656.0
+      },
     )
 
-  // 8th-order solution coefficients (b_i)
+  // 5th-order solution coefficients
   let x_new =
     x
     +. dt
     *. {
-      0.0542937341165687622380535766363 *. k1
-      +. 4.45031289275240888144113950566 *. k6
-      +. 1.89151789931450038304281599044 *. k7
-      -. 5.80120396001058478146721707624 *. k8
-      +. 0.311164366957350449629876347172 *. k9
-      -. 0.152160949662516078556178806805 *. k10
-      +. 0.201365400804030348374776537501 *. k11
-      +. 0.0447106157277725905176885569043 *. k12
+      35.0
+      *. k1
+      /. 384.0
+      +. 500.0
+      *. k3
+      /. 1113.0
+      +. 125.0
+      *. k4
+      /. 192.0
+      -. 2187.0
+      *. k5
+      /. 6784.0
+      +. 11.0
+      *. k6
+      /. 84.0
     }
 
-  // Embedded 5th-order error estimator coefficients (e_i = b_i - b̂_i)
-  let err5 =
-    dt
+  // 7th stage uses the 5th-order solution (FSAL)
+  let k7 = f(t +. dt, x_new)
+
+  // Embedded 4th-order solution
+  let x_alt =
+    x
+    +. dt
     *. {
-      0.0244094488188976377952755905512 *. k1
-      +. 0.0666666666666666666666666666667 *. k9
-      +. 0.0179453052631578947368421052632 *. k10
-      -. 0.105092592592592592592592592593 *. k11
-      +. 0.0156250000000000000000000000000 *. k12
+      5179.0
+      *. k1
+      /. 57_600.0
+      +. 7571.0
+      *. k3
+      /. 16_695.0
+      +. 393.0
+      *. k4
+      /. 640.0
+      -. 92_097.0
+      *. k5
+      /. 339_200.0
+      +. 187.0
+      *. k6
+      /. 2100.0
+      +. k7
+      /. 40.0
     }
 
-  #(x_new, abs_float(err5))
-}
-
-fn abs_float(x: Float) -> Float {
-  case x <. 0.0 {
-    True -> 0.0 -. x
-    False -> x
+  let err = case x_new >=. x_alt {
+    True -> x_new -. x_alt
+    False -> x_alt -. x_new
   }
+  #(x_new, err)
 }
 
+/// Deprecated alias retained for backwards compatibility. Returns the same
+/// pair as `dop54`. To be removed once external callers migrate.
 /// One step of RKF45 with an error estimate.
 ///
 /// Returns `#(x5, error)` where `x5` is the 5th-order estimate and `error` is

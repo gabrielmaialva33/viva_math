@@ -671,7 +671,8 @@ pub fn bpc_update(
     False -> {
       let weighted_prior = vector.scale(prior.mean, prior.precision)
       let weighted_obs = vector.scale(observation, likelihood_precision)
-      let new_mean = vector.scale(vector.add(weighted_prior, weighted_obs), 1.0 /. total)
+      let new_mean =
+        vector.scale(vector.add(weighted_prior, weighted_obs), 1.0 /. total)
       GaussianBelief(mean: new_mean, precision: total)
     }
   }

@@ -65,7 +65,8 @@ fn neumaier_loop(xs: List(Float), sum: Float, comp: Float) -> Float {
     [] -> sum +. comp
     [x, ..rest] -> {
       let t = sum +. x
-      let new_comp = case float.absolute_value(sum) >=. float.absolute_value(x)
+      let new_comp = case
+        float.absolute_value(sum) >=. float.absolute_value(x)
       {
         True -> comp +. { sum -. t +. x }
         False -> comp +. { x -. t +. sum }
@@ -215,10 +216,15 @@ pub fn moments_update(m: Moments, x: Float) -> Moments {
     +. term1
     *. delta_n_sq
     *. { n1_float *. n1_float -. 3.0 *. n1_float +. 3.0 }
-    +. 6.0 *. delta_n_sq *. m.m2
-    -. 4.0 *. delta_n *. m.m3
+    +. 6.0
+    *. delta_n_sq
+    *. m.m2
+    -. 4.0
+    *. delta_n
+    *. m.m3
 
-  let new_m3 = m.m3 +. term1 *. delta_n *. { n1_float -. 2.0 } -. 3.0 *. delta_n *. m.m2
+  let new_m3 =
+    m.m3 +. term1 *. delta_n *. { n1_float -. 2.0 } -. 3.0 *. delta_n *. m.m2
 
   let new_m2 = m.m2 +. term1
   let new_mean = m.mean +. delta_n
@@ -312,8 +318,15 @@ pub fn moments_combine(a: Moments, b: Moments) -> Moments {
       let new_m3 =
         a.m3
         +. b.m3
-        +. delta3 *. na_f *. nb_f *. { na_f -. nb_f } /. { n_f *. n_f }
-        +. 3.0 *. delta *. { na_f *. b.m2 -. nb_f *. a.m2 } /. n_f
+        +. delta3
+        *. na_f
+        *. nb_f
+        *. { na_f -. nb_f }
+        /. { n_f *. n_f }
+        +. 3.0
+        *. delta
+        *. { na_f *. b.m2 -. nb_f *. a.m2 }
+        /. n_f
       let new_m4 =
         a.m4
         +. b.m4
@@ -326,7 +339,10 @@ pub fn moments_combine(a: Moments, b: Moments) -> Moments {
         *. delta2
         *. { na_f *. na_f *. b.m2 +. nb_f *. nb_f *. a.m2 }
         /. { n_f *. n_f }
-        +. 4.0 *. delta *. { na_f *. b.m3 -. nb_f *. a.m3 } /. n_f
+        +. 4.0
+        *. delta
+        *. { na_f *. b.m3 -. nb_f *. a.m3 }
+        /. n_f
       Moments(count: n, mean: new_mean, m2: new_m2, m3: new_m3, m4: new_m4)
     }
   }
@@ -345,7 +361,8 @@ fn sqrt(x: Float) -> Float
 /// Stable cmp by absolute value (descending). Useful for sorting before
 /// summation in worst-case scenarios.
 pub fn cmp_abs_desc(a: Float, b: Float) -> order.Order {
-  case float.absolute_value(a) >. float.absolute_value(b),
+  case
+    float.absolute_value(a) >. float.absolute_value(b),
     float.absolute_value(a) <. float.absolute_value(b)
   {
     True, _ -> order.Lt
