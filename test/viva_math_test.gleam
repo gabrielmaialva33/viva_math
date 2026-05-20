@@ -3,10 +3,22 @@ import gleam/list
 import gleeunit
 import gleeunit/should
 import viva_math/attractor
+import viva_math/calculus
 import viva_math/common
+import viva_math/constants
 import viva_math/cusp
+import viva_math/distributions
 import viva_math/entropy
 import viva_math/free_energy
+import viva_math/matrix
+import viva_math/ode
+import viva_math/random
+import viva_math/scalar
+import viva_math/scheduler
+import viva_math/statistics
+import viva_math/vec2
+import viva_math/vec4
+import viva_math/vecn
 import viva_math/vector.{Vec3}
 
 pub fn main() {
@@ -273,8 +285,10 @@ pub fn free_energy_precision_weighted_test() {
   let expected = Vec3(0.0, 0.0, 0.0)
   let actual = Vec3(1.0, 0.0, 0.0)
 
-  let low_precision = free_energy.precision_weighted_prediction_error(expected, actual, 0.5)
-  let high_precision = free_energy.precision_weighted_prediction_error(expected, actual, 2.0)
+  let low_precision =
+    free_energy.precision_weighted_prediction_error(expected, actual, 0.5)
+  let high_precision =
+    free_energy.precision_weighted_prediction_error(expected, actual, 2.0)
 
   should.be_true(high_precision >. low_precision)
   should.be_true(is_close(low_precision, 0.5, 0.001))
@@ -293,16 +307,28 @@ pub fn free_energy_normalized_thresholds_test() {
   let thresholds = free_energy.FeelingThresholds(mean: 1.0, std_dev: 0.5)
 
   // F < μ - σ = 0.5 → Homeostatic
-  should.equal(free_energy.classify_feeling_normalized(0.3, thresholds), free_energy.Homeostatic)
+  should.equal(
+    free_energy.classify_feeling_normalized(0.3, thresholds),
+    free_energy.Homeostatic,
+  )
 
   // μ - σ ≤ F < μ → Surprised
-  should.equal(free_energy.classify_feeling_normalized(0.7, thresholds), free_energy.Surprised)
+  should.equal(
+    free_energy.classify_feeling_normalized(0.7, thresholds),
+    free_energy.Surprised,
+  )
 
   // μ ≤ F < μ + σ → Alarmed
-  should.equal(free_energy.classify_feeling_normalized(1.2, thresholds), free_energy.Alarmed)
+  should.equal(
+    free_energy.classify_feeling_normalized(1.2, thresholds),
+    free_energy.Alarmed,
+  )
 
   // F ≥ μ + σ → Overwhelmed
-  should.equal(free_energy.classify_feeling_normalized(2.0, thresholds), free_energy.Overwhelmed)
+  should.equal(
+    free_energy.classify_feeling_normalized(2.0, thresholds),
+    free_energy.Overwhelmed,
+  )
 }
 
 // ============================================================================
@@ -423,9 +449,11 @@ pub fn stochastic_cusp_range_test() {
 
 pub fn stochastic_simulation_length_test() {
   // Simulation should return correct number of steps
-  let params = cusp.StochasticCuspParams(alpha: -1.0, beta: 0.0, sigma: 0.1, seed: 42)
+  let params =
+    cusp.StochasticCuspParams(alpha: -1.0, beta: 0.0, sigma: 0.1, seed: 42)
   let trajectory = cusp.simulate_stochastic(0.0, params, 0.01, 10)
-  should.equal(list.length(trajectory), 11)  // initial + 10 steps
+  should.equal(list.length(trajectory), 11)
+  // initial + 10 steps
 }
 
 // ============================================================================
@@ -444,13 +472,16 @@ pub fn basin_weights_exp_sum_to_one_test() {
 pub fn basin_weights_temperature_effect_test() {
   // Lower temperature should make weights sharper (max weight higher)
   let attractors = attractor.emotional_attractors()
-  let point = vector.Vec3(0.7, 0.4, 0.3)  // Near joy
+  let point = vector.Vec3(0.7, 0.4, 0.3)
+  // Near joy
 
   let weights_warm = attractor.basin_weights(point, attractors, 2.0)
   let weights_cold = attractor.basin_weights(point, attractors, 0.5)
 
-  let max_warm = list.fold(weights_warm, 0.0, fn(acc, p) { float.max(acc, p.1) })
-  let max_cold = list.fold(weights_cold, 0.0, fn(acc, p) { float.max(acc, p.1) })
+  let max_warm =
+    list.fold(weights_warm, 0.0, fn(acc, p) { float.max(acc, p.1) })
+  let max_cold =
+    list.fold(weights_cold, 0.0, fn(acc, p) { float.max(acc, p.1) })
 
   // Cold (low temp) should have higher max weight
   should.be_true(max_cold >. max_warm)
@@ -462,8 +493,10 @@ pub fn basin_weights_temperature_effect_test() {
 
 pub fn hybrid_entropy_blend_test() {
   // Blend of two distributions
-  let p1 = [0.5, 0.5]  // H = 1.0
-  let p2 = [1.0, 0.0]  // H = 0.0
+  let p1 = [0.5, 0.5]
+  // H = 1.0
+  let p2 = [1.0, 0.0]
+  // H = 0.0
 
   let h_blend = entropy.hybrid_shannon(p1, p2, 0.5)
   // Should be average: 0.5 * 1.0 + 0.5 * 0.0 = 0.5
@@ -472,8 +505,10 @@ pub fn hybrid_entropy_blend_test() {
 
 pub fn hybrid_entropy_alpha_zero_test() {
   // Alpha = 0 should give H(p2)
-  let p1 = [0.5, 0.5]  // H = 1.0
-  let p2 = [1.0, 0.0]  // H = 0.0
+  let p1 = [0.5, 0.5]
+  // H = 1.0
+  let p2 = [1.0, 0.0]
+  // H = 0.0
 
   let h = entropy.hybrid_shannon(p1, p2, 0.0)
   should.be_true(is_close(h, 0.0, 0.01))
@@ -481,8 +516,10 @@ pub fn hybrid_entropy_alpha_zero_test() {
 
 pub fn hybrid_entropy_alpha_one_test() {
   // Alpha = 1 should give H(p1)
-  let p1 = [0.5, 0.5]  // H = 1.0
-  let p2 = [1.0, 0.0]  // H = 0.0
+  let p1 = [0.5, 0.5]
+  // H = 1.0
+  let p2 = [1.0, 0.0]
+  // H = 0.0
 
   let h = entropy.hybrid_shannon(p1, p2, 1.0)
   should.be_true(is_close(h, 1.0, 0.01))
@@ -498,7 +535,8 @@ pub fn kl_sensitivity_standard_test() {
   let q = [0.6, 0.4]
 
   let assert Ok(kl_standard) = entropy.kl_divergence(p, q)
-  let assert Ok(kl_sens) = entropy.kl_divergence_with_sensitivity(p, q, entropy.Standard)
+  let assert Ok(kl_sens) =
+    entropy.kl_divergence_with_sensitivity(p, q, entropy.Standard)
 
   should.be_true(is_close(kl_standard, kl_sens, 0.001))
 }
@@ -508,8 +546,10 @@ pub fn kl_sensitivity_arousal_increases_test() {
   let p = [0.9, 0.1]
   let q = [0.5, 0.5]
 
-  let assert Ok(kl_low) = entropy.kl_divergence_with_sensitivity(p, q, entropy.ArousalWeighted(0.2))
-  let assert Ok(kl_high) = entropy.kl_divergence_with_sensitivity(p, q, entropy.ArousalWeighted(0.8))
+  let assert Ok(kl_low) =
+    entropy.kl_divergence_with_sensitivity(p, q, entropy.ArousalWeighted(0.2))
+  let assert Ok(kl_high) =
+    entropy.kl_divergence_with_sensitivity(p, q, entropy.ArousalWeighted(0.8))
 
   should.be_true(kl_high >. kl_low)
 }
@@ -550,6 +590,354 @@ pub fn gaussian_kl_full_equal_variance_test() {
   // = 0 + (1 + 0.25)/2 - 0.5 = 0.625 - 0.5 = 0.125
   // Simple KL = d²/(2σ²) = 0.25/2 = 0.125
   should.be_true(is_close(kl_simple, kl_full, 0.01))
+}
+
+// ============================================================================
+// scalar.gleam tests
+// ============================================================================
+
+pub fn scalar_erf_zero_test() {
+  should.be_true(is_close(scalar.erf(0.0), 0.0, 1.0e-9))
+}
+
+pub fn scalar_erf_one_test() {
+  // erf(1) ≈ 0.8427007929
+  should.be_true(is_close(scalar.erf(1.0), 0.8427007929, 1.0e-6))
+}
+
+pub fn scalar_erfc_complement_test() {
+  // erf(x) + erfc(x) = 1
+  let x = 0.5
+  should.be_true(is_close(scalar.erf(x) +. scalar.erfc(x), 1.0, 1.0e-9))
+}
+
+pub fn scalar_gelu_zero_test() {
+  // GELU(0) = 0
+  should.be_true(is_close(scalar.gelu(0.0), 0.0, 1.0e-9))
+}
+
+pub fn scalar_gelu_large_test() {
+  // GELU(large positive) ≈ identity
+  should.be_true(is_close(scalar.gelu(10.0), 10.0, 1.0e-3))
+}
+
+pub fn scalar_silu_zero_test() {
+  // SiLU(0) = 0 · σ(0) = 0
+  should.be_true(is_close(scalar.silu(0.0), 0.0, 1.0e-9))
+}
+
+pub fn scalar_softplus_zero_test() {
+  // softplus(0) = ln(2)
+  should.be_true(is_close(scalar.softplus(0.0), constants.ln_2, 1.0e-6))
+}
+
+pub fn scalar_logsumexp_test() {
+  // logsumexp([0, 0]) = ln(2)
+  should.be_true(is_close(scalar.logsumexp([0.0, 0.0]), constants.ln_2, 1.0e-6))
+}
+
+pub fn scalar_relu_test() {
+  scalar.relu(-1.0) |> should.equal(0.0)
+  scalar.relu(2.5) |> should.equal(2.5)
+}
+
+pub fn scalar_hypot_test() {
+  // 3-4-5 right triangle
+  should.be_true(is_close(scalar.hypot(3.0, 4.0), 5.0, 1.0e-9))
+}
+
+// ============================================================================
+// constants.gleam tests
+// ============================================================================
+
+pub fn constants_pi_test() {
+  should.be_true(is_close(constants.pi, 3.14159265, 1.0e-6))
+}
+
+pub fn constants_tau_test() {
+  should.be_true(is_close(constants.tau, 2.0 *. constants.pi, 1.0e-9))
+}
+
+pub fn constants_sqrt_2_squared_test() {
+  should.be_true(is_close(constants.sqrt_2 *. constants.sqrt_2, 2.0, 1.0e-9))
+}
+
+// ============================================================================
+// statistics.gleam tests
+// ============================================================================
+
+pub fn statistics_mean_test() {
+  let assert Ok(m) = statistics.mean([1.0, 2.0, 3.0, 4.0, 5.0])
+  should.be_true(is_close(m, 3.0, 1.0e-9))
+}
+
+pub fn statistics_variance_test() {
+  // Var([2, 4, 4, 4, 5, 5, 7, 9]) = 4 (population)
+  let assert Ok(v) =
+    statistics.variance([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0])
+  should.be_true(is_close(v, 4.0, 1.0e-6))
+}
+
+pub fn statistics_median_odd_test() {
+  let assert Ok(m) = statistics.median([1.0, 3.0, 2.0])
+  should.be_true(is_close(m, 2.0, 1.0e-9))
+}
+
+pub fn statistics_median_even_test() {
+  let assert Ok(m) = statistics.median([1.0, 2.0, 3.0, 4.0])
+  should.be_true(is_close(m, 2.5, 1.0e-9))
+}
+
+pub fn statistics_ema_test() {
+  let assert Ok(series) = statistics.ema([1.0, 2.0, 3.0], 0.5)
+  // y0 = 1, y1 = 0.5·2 + 0.5·1 = 1.5, y2 = 0.5·3 + 0.5·1.5 = 2.25
+  should.equal(list.length(series), 3)
+}
+
+pub fn statistics_percentile_test() {
+  let assert Ok(q3) = statistics.percentile([1.0, 2.0, 3.0, 4.0, 5.0], 0.75)
+  should.be_true(is_close(q3, 4.0, 1.0e-6))
+}
+
+// ============================================================================
+// random.gleam tests
+// ============================================================================
+
+pub fn random_uniform_reproducible_test() {
+  let seed = random.from_int(42)
+  let #(a, _) = random.uniform(seed)
+  let seed2 = random.from_int(42)
+  let #(b, _) = random.uniform(seed2)
+  // Same seed -> identical sequence
+  should.equal(a, b)
+}
+
+pub fn random_uniform_in_range_test() {
+  let seed = random.from_int(7)
+  let #(x, _) = random.uniform(seed)
+  should.be_true(x >=. 0.0 && x <. 1.0)
+}
+
+pub fn random_normal_works_test() {
+  let seed = random.from_int(123)
+  let #(_, _) = random.normal(seed, 0.0, 1.0)
+  should.be_true(True)
+}
+
+pub fn random_categorical_test() {
+  let seed = random.from_int(1)
+  let assert Ok(#(idx, _)) = random.categorical(seed, [0.0, 1.0, 0.0])
+  // Only second category has mass
+  should.equal(idx, 1)
+}
+
+// ============================================================================
+// distributions.gleam tests
+// ============================================================================
+
+pub fn distributions_gaussian_pdf_at_mean_test() {
+  let g = distributions.Gaussian(mean: 0.0, stddev: 1.0)
+  // PDF at mean = 1/√(2π) ≈ 0.3989
+  should.be_true(is_close(
+    distributions.gaussian_pdf(g, 0.0),
+    constants.inv_sqrt_2pi,
+    1.0e-6,
+  ))
+}
+
+pub fn distributions_gaussian_cdf_half_test() {
+  // F(μ) = 0.5
+  let g = distributions.Gaussian(mean: 0.0, stddev: 1.0)
+  should.be_true(is_close(distributions.gaussian_cdf(g, 0.0), 0.5, 1.0e-9))
+}
+
+pub fn distributions_uniform_pdf_test() {
+  let u = distributions.Uniform(low: 0.0, high: 2.0)
+  should.be_true(is_close(distributions.uniform_pdf(u, 1.0), 0.5, 1.0e-9))
+}
+
+// ============================================================================
+// scheduler.gleam tests
+// ============================================================================
+
+pub fn scheduler_linear_warmup_test() {
+  scheduler.linear_warmup(1.0, 0, 10) |> should.equal(0.0)
+  scheduler.linear_warmup(1.0, 10, 10) |> should.equal(1.0)
+  should.be_true(is_close(scheduler.linear_warmup(1.0, 5, 10), 0.5, 1.0e-9))
+}
+
+pub fn scheduler_cosine_at_zero_test() {
+  // At step 0, cosine annealing = base_lr
+  should.be_true(is_close(
+    scheduler.cosine_annealing(1.0, 0, 100, 0.0),
+    1.0,
+    1.0e-9,
+  ))
+}
+
+pub fn scheduler_cosine_at_end_test() {
+  // At step T_max, cosine annealing = min_lr
+  should.be_true(is_close(
+    scheduler.cosine_annealing(1.0, 100, 100, 0.0),
+    0.0,
+    1.0e-9,
+  ))
+}
+
+pub fn scheduler_exponential_test() {
+  should.be_true(is_close(scheduler.exponential(1.0, 2, 0.5), 0.25, 1.0e-9))
+}
+
+// ============================================================================
+// ode.gleam tests
+// ============================================================================
+
+pub fn ode_euler_constant_test() {
+  // dx/dt = 1, x(0) = 0, dt = 1 -> x(1) = 1
+  let f = fn(_t: Float, _x: Float) { 1.0 }
+  should.be_true(is_close(ode.euler(f, 0.0, 0.0, 1.0), 1.0, 1.0e-9))
+}
+
+pub fn ode_rk4_quadratic_test() {
+  // dx/dt = 2t, x(0) = 0 -> x(1) = 1 (exact integration of 2t)
+  let f = fn(t: Float, _x: Float) { 2.0 *. t }
+  let result = ode.rk4(f, 0.0, 0.0, 1.0)
+  should.be_true(is_close(result, 1.0, 1.0e-6))
+}
+
+pub fn ode_integrate_length_test() {
+  let f = fn(_t: Float, _x: Float) { 1.0 }
+  let traj = ode.integrate(ode.euler, f, 0.0, 0.0, 0.1, 10)
+  // 1 initial + 10 steps
+  should.equal(list.length(traj), 11)
+}
+
+// ============================================================================
+// calculus.gleam tests
+// ============================================================================
+
+pub fn calculus_central_diff_test() {
+  // d/dx (x²) at x=2 is 4
+  let f = fn(x: Float) { x *. x }
+  should.be_true(is_close(calculus.central_diff(f, 2.0, 1.0e-4), 4.0, 1.0e-4))
+}
+
+pub fn calculus_trapezoid_test() {
+  // ∫₀¹ x dx = 0.5
+  let f = fn(x: Float) { x }
+  should.be_true(is_close(calculus.trapezoid(f, 0.0, 1.0, 100), 0.5, 1.0e-6))
+}
+
+pub fn calculus_simpson_test() {
+  // ∫₀² x² dx = 8/3
+  let f = fn(x: Float) { x *. x }
+  let assert Ok(result) = calculus.simpson(f, 0.0, 2.0, 100)
+  should.be_true(is_close(result, 8.0 /. 3.0, 1.0e-6))
+}
+
+// ============================================================================
+// matrix.gleam tests
+// ============================================================================
+
+pub fn matrix_mat2_identity_mul_test() {
+  let i = matrix.mat2_identity()
+  let m = matrix.Mat2(2.0, 3.0, 4.0, 5.0)
+  let result = matrix.mat2_mul(i, m)
+  should.equal(result.m11, 2.0)
+  should.equal(result.m22, 5.0)
+}
+
+pub fn matrix_mat2_inverse_test() {
+  let m = matrix.Mat2(4.0, 7.0, 2.0, 6.0)
+  let assert Ok(inv) = matrix.mat2_inverse(m)
+  // M · M⁻¹ should be identity
+  let prod = matrix.mat2_mul(m, inv)
+  should.be_true(is_close(prod.m11, 1.0, 1.0e-9))
+  should.be_true(is_close(prod.m22, 1.0, 1.0e-9))
+  should.be_true(is_close(prod.m12, 0.0, 1.0e-9))
+}
+
+pub fn matrix_mat3_determinant_identity_test() {
+  should.be_true(is_close(
+    matrix.mat3_determinant(matrix.mat3_identity()),
+    1.0,
+    1.0e-9,
+  ))
+}
+
+pub fn matrix_mat3_mul_vec3_test() {
+  let i = matrix.mat3_identity()
+  let v = Vec3(1.0, 2.0, 3.0)
+  let result = matrix.mat3_mul_vec3(i, v)
+  should.equal(result, v)
+}
+
+pub fn matrix_matn_transpose_test() {
+  let assert Ok(m) = matrix.matn_from_rows([[1.0, 2.0], [3.0, 4.0]])
+  let t = matrix.matn_transpose(m)
+  should.equal(t.rows, 2)
+  should.equal(t.cols, 2)
+}
+
+// ============================================================================
+// vec2 / vec4 / vecn tests
+// ============================================================================
+
+pub fn vec2_length_test() {
+  should.be_true(is_close(vec2.length(vec2.Vec2(3.0, 4.0)), 5.0, 1.0e-9))
+}
+
+pub fn vec2_rotate_quarter_turn_test() {
+  // Rotating (1, 0) by π/2 gives ~(0, 1)
+  let rotated = vec2.rotate(vec2.Vec2(1.0, 0.0), constants.half_pi)
+  should.be_true(vec2.is_close(rotated, vec2.Vec2(0.0, 1.0), 1.0e-9))
+}
+
+pub fn vec4_dot_test() {
+  let a = vec4.Vec4(1.0, 2.0, 3.0, 4.0)
+  let b = vec4.Vec4(1.0, 1.0, 1.0, 1.0)
+  should.be_true(is_close(vec4.dot(a, b), 10.0, 1.0e-9))
+}
+
+pub fn vecn_add_test() {
+  let assert Ok(result) = vecn.add([1.0, 2.0, 3.0], [10.0, 20.0, 30.0])
+  should.equal(result, [11.0, 22.0, 33.0])
+}
+
+pub fn vecn_dot_test() {
+  let assert Ok(d) = vecn.dot([1.0, 2.0, 3.0], [1.0, 1.0, 1.0])
+  should.be_true(is_close(d, 6.0, 1.0e-9))
+}
+
+// ============================================================================
+// entropy extensions tests
+// ============================================================================
+
+pub fn entropy_tsallis_q_one_test() {
+  // Tsallis with q → 1 should approach Shannon
+  let probs = [0.5, 0.5]
+  let assert Ok(t) = entropy.tsallis(probs, 1.0)
+  should.be_true(is_close(t, entropy.shannon(probs), 1.0e-6))
+}
+
+pub fn entropy_fisher_test() {
+  let assert Ok(i) = entropy.fisher_information_gaussian(2.0)
+  should.be_true(is_close(i, 0.25, 1.0e-9))
+}
+
+// ============================================================================
+// free_energy extensions tests
+// ============================================================================
+
+pub fn expected_free_energy_zero_distance_test() {
+  let g =
+    free_energy.expected_free_energy(
+      vector.Vec3(0.0, 0.0, 0.0),
+      vector.Vec3(0.0, 0.0, 0.0),
+      0.5,
+    )
+  should.be_true(is_close(g.epistemic, 0.5, 1.0e-9))
+  should.be_true(is_close(g.pragmatic, 0.0, 1.0e-9))
 }
 
 // ============================================================================
