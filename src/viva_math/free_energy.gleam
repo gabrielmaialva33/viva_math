@@ -127,13 +127,18 @@ pub fn gaussian_kl_divergence_full(
 
       // log(σ₂) - log(σ₁) = 0.5 * (log(σ₂²) - log(σ₁²))
       // Using separate logs for numerical stability when variances are small
-      let log_ratio = case maths.natural_logarithm(prior_variance), maths.natural_logarithm(posterior_variance) {
-        Ok(log_prior), Ok(log_posterior) -> { log_prior -. log_posterior } /. 2.0
+      let log_ratio = case
+        maths.natural_logarithm(prior_variance),
+        maths.natural_logarithm(posterior_variance)
+      {
+        Ok(log_prior), Ok(log_posterior) ->
+          { log_prior -. log_posterior } /. 2.0
         _, _ -> 0.0
       }
 
       // (σ₁² + (μ₁-μ₂)²) / (2σ₂²) term
-      let ratio_term = { posterior_variance +. diff_squared } /. { 2.0 *. prior_variance }
+      let ratio_term =
+        { posterior_variance +. diff_squared } /. { 2.0 *. prior_variance }
 
       // Full KL: log(σ₂/σ₁) + (σ₁² + (μ₁-μ₂)²)/(2σ₂²) - 1/2
       log_ratio +. ratio_term -. 0.5
@@ -179,7 +184,8 @@ pub fn free_energy(
   precision: Float,
   prior_variance: Float,
 ) -> Float {
-  let accuracy = precision_weighted_prediction_error(expected, actual, precision)
+  let accuracy =
+    precision_weighted_prediction_error(expected, actual, precision)
   let cx = complexity(actual, baseline, prior_variance)
   accuracy +. cx
 }
@@ -194,7 +200,8 @@ pub fn compute_state(
   prior_variance: Float,
   thresholds: FeelingThresholds,
 ) -> FreeEnergyState {
-  let accuracy = precision_weighted_prediction_error(expected, actual, precision)
+  let accuracy =
+    precision_weighted_prediction_error(expected, actual, precision)
   let cx = complexity(actual, baseline, prior_variance)
   let fe = accuracy +. cx
 
@@ -272,7 +279,11 @@ pub fn update_thresholds(
 
   // Update variance estimate
   let diff = observed_fe -. current.mean
-  let new_var = alpha *. { diff *. diff } +. { 1.0 -. alpha } *. { current.std_dev *. current.std_dev }
+  let new_var =
+    alpha
+    *. { diff *. diff }
+    +. { 1.0 -. alpha }
+    *. { current.std_dev *. current.std_dev }
 
   // Convert variance back to std_dev (sqrt = nth_root with n=2)
   let new_std = case maths.nth_root(new_var, 2) {
@@ -343,7 +354,8 @@ pub fn estimate_precision(errors: List(Float)) -> Float {
         /. n_float
 
       case variance <. 0.001 {
-        True -> 100.0  // Very precise
+        True -> 100.0
+        // Very precise
         False -> 1.0 /. variance
       }
     }
@@ -398,13 +410,113 @@ pub fn variational_bound(
   kl_divergence: Float,
 ) -> Float {
   let neg_log_likelihood = case observation_likelihood <=. 0.0 {
-    True -> 100.0  // Large surprise for impossible observations
-    False -> case maths.natural_logarithm(observation_likelihood) {
-      Ok(log_l) -> 0.0 -. log_l
-      Error(_) -> 100.0
-    }
+    True -> 100.0
+    // Large surprise for impossible observations
+    False ->
+      case maths.natural_logarithm(observation_likelihood) {
+        Ok(log_l) -> 0.0 -. log_l
+        Error(_) -> 100.0
+      }
   }
   neg_log_likelihood +. kl_divergence
+}
+
+// ============================================================================
+// Expected Free Energy (Active Inference for planning)
+// ============================================================================
+
+/// Expected Free Energy components.
+///
+/// In planning, an agent selects actions that minimise G = epistemic + pragmatic.
+/// Splitting the components lets you steer exploration (epistemic) vs
+/// exploitation (pragmatic) by reweighting them.
+pub type ExpectedFreeEnergy {
+  ExpectedFreeEnergy(
+    /// Information gain from observing the outcome (exploration).
+    epistemic: Float,
+    /// Expected divergence from preferred outcomes (exploitation).
+    pragmatic: Float,
+    /// G = epistemic + pragmatic.
+    total: Float,
+  )
+}
+
+/// Decompose Expected Free Energy.
+///
+/// - `predicted_outcome`: agent's expectation of the future state under action a.
+/// - `preferred_outcome`: agent's goal state (homeostatic setpoint).
+/// - `predictive_uncertainty`: entropy of the predictive distribution (epistemic).
+pub fn expected_free_energy(
+  predicted_outcome: Vec3,
+  preferred_outcome: Vec3,
+  predictive_uncertainty: Float,
+) -> ExpectedFreeEnergy {
+  let epistemic = predictive_uncertainty
+  let pragmatic = vector.distance_squared(predicted_outcome, preferred_outcome)
+  ExpectedFreeEnergy(
+    epistemic: epistemic,
+    pragmatic: pragmatic,
+    total: epistemic +. pragmatic,
+  )
+}
+
+/// Select the action with minimum Expected Free Energy.
+///
+/// `policies` is a list of `(action_label, predicted_outcome, predictive_uncertainty)`.
+/// Returns the best policy or `Error(Nil)` if the list is empty.
+pub fn select_policy(
+  policies: List(#(a, Vec3, Float)),
+  preferred_outcome: Vec3,
+) -> Result(#(a, ExpectedFreeEnergy), Nil) {
+  case policies {
+    [] -> Error(Nil)
+    [first, ..rest] -> {
+      let #(label, outcome, uncertainty) = first
+      let g = expected_free_energy(outcome, preferred_outcome, uncertainty)
+      let initial = #(label, g)
+      Ok(
+        list.fold(rest, initial, fn(acc, p) {
+          let #(p_label, p_outcome, p_unc) = p
+          let p_g = expected_free_energy(p_outcome, preferred_outcome, p_unc)
+          case p_g.total <. acc.1.total {
+            True -> #(p_label, p_g)
+            False -> acc
+          }
+        }),
+      )
+    }
+  }
+}
+
+/// Softmax over policies: probability of selecting each action given its
+/// Expected Free Energy. Lower G → higher probability (β controls sharpness).
+pub fn policy_posterior(
+  policies: List(#(a, Vec3, Float)),
+  preferred_outcome: Vec3,
+  beta: Float,
+) -> List(#(a, Float)) {
+  let gs =
+    list.map(policies, fn(p) {
+      let #(label, outcome, uncertainty) = p
+      let g = expected_free_energy(outcome, preferred_outcome, uncertainty)
+      #(label, 0.0 -. beta *. g.total)
+    })
+
+  // Max subtraction for stability.
+  let max_g =
+    list.fold(gs, -1.0e300, fn(acc, pair) {
+      case pair.1 >. acc {
+        True -> pair.1
+        False -> acc
+      }
+    })
+  let exps =
+    list.map(gs, fn(pair) { #(pair.0, maths.exponential(pair.1 -. max_g)) })
+  let total = list.fold(exps, 0.0, fn(acc, pair) { acc +. pair.1 })
+  case total == 0.0 {
+    True -> list.map(policies, fn(p) { #(p.0, 0.0) })
+    False -> list.map(exps, fn(pair) { #(pair.0, pair.1 /. total) })
+  }
 }
 
 // Helper: convert int to float
