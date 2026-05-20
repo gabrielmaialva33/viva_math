@@ -638,6 +638,77 @@ fn meta_pairs(errors: List(Vec3), acc: List(Vec3)) -> List(Vec3) {
   }
 }
 
+/// One inference step of gradient descent on the hierarchical free energy.
+///
+/// For each non-top layer l, updates the latent state μ_l along the descent
+/// direction `-∂F/∂μ_l`, where:
+///   ∂F/∂μ_l = Π_l · (μ_l - μ_{l+1}) + Π_{l-1} · (μ_l - μ_{l-1})
+///                       ↑                            ↑
+///              top-down prior fit              bottom-up evidence fit
+///
+/// `lr` is the learning rate (step size); typical values 0.01–0.1 for stable
+/// inference. The bottom layer's μ is left untouched — it represents the
+/// sensory observation and is fixed during inference.
+pub fn hierarchical_inference_step(
+  h: Hierarchical,
+  lr: Float,
+) -> Hierarchical {
+  case h.layers {
+    [] -> h
+    [_] -> h
+    _ -> {
+      let updated = inference_walk(h.layers, lr, [])
+      Hierarchical(layers: updated)
+    }
+  }
+}
+
+fn inference_walk(
+  layers: List(HierarchicalLayer),
+  lr: Float,
+  acc: List(HierarchicalLayer),
+) -> List(HierarchicalLayer) {
+  case layers {
+    [] -> list.reverse(acc)
+    [single] -> list.reverse([single, ..acc])
+    [lower, upper, ..rest] -> {
+      // For the first (sensory) layer we keep μ fixed.
+      case acc {
+        [] -> inference_walk([upper, ..rest], lr, [lower])
+        _ -> {
+          let prev = case acc {
+            [p, ..] -> p
+            [] -> lower
+          }
+          let bottom_up = vector.sub(lower.mu, prev.mu)
+          let top_down = vector.sub(upper.mu, lower.mu)
+          let grad =
+            vector.add(
+              vector.scale(bottom_up, prev.precision),
+              vector.scale(top_down, 0.0 -. lower.precision),
+            )
+          let new_mu = vector.sub(lower.mu, vector.scale(grad, lr))
+          let new_layer = HierarchicalLayer(..lower, mu: new_mu)
+          inference_walk([upper, ..rest], lr, [new_layer, ..acc])
+        }
+      }
+    }
+  }
+}
+
+/// Run `n` inference steps. Convenience wrapper around
+/// `hierarchical_inference_step`.
+pub fn hierarchical_infer(
+  h: Hierarchical,
+  lr: Float,
+  n: Int,
+) -> Hierarchical {
+  case n <= 0 {
+    True -> h
+    False -> hierarchical_infer(hierarchical_inference_step(h, lr), lr, n - 1)
+  }
+}
+
 // ============================================================================
 // Bayesian Predictive Coding (BPC) — closed-form weight update
 // ============================================================================
