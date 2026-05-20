@@ -25,8 +25,8 @@
 //// // Same seed0 always produces the same x, y sequence.
 //// ```
 
+import gleam/dict.{type Dict}
 import gleam/list
-import gleam/order
 
 // ============================================================================
 // Types
@@ -204,37 +204,62 @@ pub fn choice(seed: Seed, xs: List(a)) -> Result(#(a, Seed), Nil) {
 // Shuffle (Fisher-Yates via key tagging + sort)
 // ============================================================================
 
-/// Return a random permutation of `xs`.
+/// Return a random permutation of `xs` via Fisher–Yates (modern Durstenfeld
+/// variant), implemented on top of a `dict` for O(log n) indexed swaps.
 ///
-/// Implementation: tag each element with a uniform key, then sort. This is
-/// O(n log n) but avoids the imperative state of classical Fisher-Yates while
-/// remaining deterministic for a given seed.
+/// Truly uniform over all n! permutations (no float-key collision bias the
+/// sort-based shuffle suffered from).
 pub fn shuffle(seed: Seed, xs: List(a)) -> #(List(a), Seed) {
-  let #(tagged, final_seed) = tag_with_keys(xs, seed, [])
-  let sorted =
-    list.sort(tagged, fn(a, b) {
-      let #(_, key_a) = a
-      let #(_, key_b) = b
-      case key_a <. key_b, key_a >. key_b {
-        True, _ -> order.Lt
-        _, True -> order.Gt
-        _, _ -> order.Eq
-      }
-    })
-  #(list.map(sorted, fn(pair) { pair.0 }), final_seed)
+  let n = list.length(xs)
+  case n {
+    0 -> #([], seed)
+    _ -> {
+      let initial = list_to_dict(xs, 0, dict.new())
+      let #(shuffled, final_seed) = fisher_yates(initial, n - 1, seed)
+      #(dict_to_list(shuffled, 0, n, []), final_seed)
+    }
+  }
 }
 
-fn tag_with_keys(
-  xs: List(a),
-  seed: Seed,
-  acc: List(#(a, Float)),
-) -> #(List(#(a, Float)), Seed) {
+fn list_to_dict(xs: List(a), i: Int, acc: Dict(Int, a)) -> Dict(Int, a) {
   case xs {
-    [] -> #(list.reverse(acc), seed)
-    [x, ..rest] -> {
-      let #(k, s) = ffi_uniform_real(seed)
-      tag_with_keys(rest, s, [#(x, k), ..acc])
+    [] -> acc
+    [x, ..rest] -> list_to_dict(rest, i + 1, dict.insert(acc, i, x))
+  }
+}
+
+fn dict_to_list(d: Dict(Int, a), i: Int, n: Int, acc: List(a)) -> List(a) {
+  case i >= n {
+    True -> list.reverse(acc)
+    False ->
+      case dict.get(d, i) {
+        Ok(v) -> dict_to_list(d, i + 1, n, [v, ..acc])
+        Error(_) -> list.reverse(acc)
+      }
+  }
+}
+
+fn fisher_yates(
+  arr: Dict(Int, a),
+  i: Int,
+  seed: Seed,
+) -> #(Dict(Int, a), Seed) {
+  case i <= 0 {
+    True -> #(arr, seed)
+    False -> {
+      // Draw j uniformly from [0, i]
+      let #(j_raw, s1) = ffi_uniform_int(i + 1, seed)
+      let j = j_raw - 1
+      let swapped = swap(arr, i, j)
+      fisher_yates(swapped, i - 1, s1)
     }
+  }
+}
+
+fn swap(d: Dict(Int, a), i: Int, j: Int) -> Dict(Int, a) {
+  case dict.get(d, i), dict.get(d, j) {
+    Ok(vi), Ok(vj) -> dict.insert(dict.insert(d, i, vj), j, vi)
+    _, _ -> d
   }
 }
 
