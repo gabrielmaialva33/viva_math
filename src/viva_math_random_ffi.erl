@@ -42,8 +42,10 @@ normal_standard(S) ->
     rand:normal_s(S).
 
 %% @doc Normal sample N(Mu, Sigma^2).
-normal_with(Mu, Sigma, S) ->
-    rand:normal_s(Mu, Sigma, S).
+%% NOTE: rand:normal_s/3 expects variance (sigma^2), but our API accepts
+%% standard deviation. We square here so callers can pass sigma naturally.
+normal_with(Mu, Sigma, S) when is_number(Sigma), Sigma >= 0 ->
+    rand:normal_s(Mu, Sigma * Sigma, S).
 
 %% @doc Advance the state by 2^64 calls (non-overlapping streams).
 jump(S) ->

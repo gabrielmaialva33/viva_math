@@ -131,10 +131,15 @@ pub fn normal(seed: Seed, mu: Float, sigma: Float) -> #(Float, Seed) {
   ffi_normal_with(mu, sigma, seed)
 }
 
-/// Bernoulli sample: True with probability p.
+/// Bernoulli sample: True with probability `p`. `p` is clamped to [0, 1].
 pub fn bernoulli(seed: Seed, p: Float) -> #(Bool, Seed) {
+  let p_clamped = case p {
+    p if p <. 0.0 -> 0.0
+    p if p >. 1.0 -> 1.0
+    _ -> p
+  }
   let #(u, s) = ffi_uniform_real(seed)
-  #(u <. p, s)
+  #(u <. p_clamped, s)
 }
 
 // ============================================================================
@@ -149,11 +154,13 @@ pub fn categorical(
   seed: Seed,
   probs: List(Float),
 ) -> Result(#(Int, Seed), Nil) {
+  let any_negative = list.any(probs, fn(p) { p <. 0.0 })
   let total = list.fold(probs, 0.0, fn(acc, p) { acc +. p })
-  case probs, total >. 0.0 {
-    [], _ -> Error(Nil)
-    _, False -> Error(Nil)
-    _, True -> {
+  case probs, any_negative, total >. 0.0 {
+    [], _, _ -> Error(Nil)
+    _, True, _ -> Error(Nil)
+    _, _, False -> Error(Nil)
+    _, _, True -> {
       let #(u, s) = ffi_uniform_real(seed)
       let target = u *. total
       Ok(#(categorical_walk(probs, target, 0, 0.0), s))
