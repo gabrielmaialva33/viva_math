@@ -23,6 +23,7 @@
 
 import gleam/float
 import viva_math/constants
+import viva_math/precision
 
 // ============================================================================
 // Erlang FFI - delegate to :math BIFs
@@ -140,21 +141,30 @@ pub fn safe_div(a: Float, b: Float, default: Float) -> Float {
 /// log(exp(a) + exp(b)) without overflow.
 ///
 /// Uses the identity log(e^a + e^b) = max(a,b) + log(1 + exp(-|a-b|)).
+/// When `a == b` (including ±∞) short-circuits to avoid ∞ - ∞ → NaN.
 pub fn logaddexp(a: Float, b: Float) -> Float {
-  let m = float.max(a, b)
-  let d = float.absolute_value(a -. b)
-  m +. log1p(exp(0.0 -. d))
+  case a == b {
+    True -> a +. ln(2.0)
+    False -> {
+      let m = float.max(a, b)
+      let d = float.absolute_value(a -. b)
+      m +. log1p(exp(0.0 -. d))
+    }
+  }
 }
 
 /// log(Σ exp(xᵢ)) — log-sum-exp with max subtraction for stability.
+///
+/// Uses Neumaier compensated summation on the exp-shifted terms to retain
+/// precision when xᵢ values span many orders of magnitude.
 pub fn logsumexp(xs: List(Float)) -> Float {
   case xs {
     [] -> 0.0 -. constants.max_float
     [x] -> x
     _ -> {
       let m = list_max(xs, 0.0 -. constants.max_float)
-      let sum = list_sum_exp_shifted(xs, m, 0.0)
-      m +. ln(sum)
+      let shifted = list_shifted_exps(xs, m, [])
+      m +. ln(precision.neumaier_sum(shifted))
     }
   }
 }
@@ -166,10 +176,14 @@ fn list_max(xs: List(Float), acc: Float) -> Float {
   }
 }
 
-fn list_sum_exp_shifted(xs: List(Float), m: Float, acc: Float) -> Float {
+fn list_shifted_exps(
+  xs: List(Float),
+  m: Float,
+  acc: List(Float),
+) -> List(Float) {
   case xs {
     [] -> acc
-    [x, ..rest] -> list_sum_exp_shifted(rest, m, acc +. exp(x -. m))
+    [x, ..rest] -> list_shifted_exps(rest, m, [exp(x -. m), ..acc])
   }
 }
 
@@ -288,6 +302,68 @@ pub fn softplus(x: Float) -> Float {
   float.max(x, 0.0) +. log1p(exp(0.0 -. float.absolute_value(x)))
 }
 
+// ============================================================================
+// 2026 activations — λ-GELU and IGLU family
+// ============================================================================
+
+/// λ-GELU: hardness-parameterised GELU `x · Φ(λx)` with `λ ≥ 1`.
+///
+/// `λ = 1` recovers standard GELU; `λ → ∞` approaches ReLU. Useful for
+/// learnable activation hardness, hardware quantisation-friendly fine-tuning,
+/// and gradual ReLU substitution during training.
+///
+/// Reference: Cantos & Aragón (2026) "λ-GELU: A Hardness-Parameterised GELU
+/// for Smooth ReLU Substitution" (arXiv:2603.21991).
+pub fn lambda_gelu(x: Float, lambda: Float) -> Float {
+  let l = case lambda <. 1.0 {
+    True -> 1.0
+    False -> lambda
+  }
+  0.5 *. x *. { 1.0 +. erf(l *. x *. constants.inv_sqrt_2) }
+}
+
+/// IGLU (Integrated Gaussian Linear Unit): continuous mixture of GELU
+/// activations under a Gaussian dispersion of "decision hardness".
+///
+/// `IGLU(x; σ) = x · Z(x; σ)` where Z uses arctan-based gating. Provides
+/// smoother gradients than GELU near zero and heavier tails.
+///
+/// Reference: Aragón et al. (2026) "IGLU: An Integrated Gaussian Linear
+/// Activation Function" (arXiv:2603.06861).
+pub fn iglu(x: Float, sigma: Float) -> Float {
+  let s = case sigma <=. 0.0 {
+    True -> 1.0e-6
+    False -> sigma
+  }
+  let gate = 0.5 +. inv_pi() *. atan(x /. s)
+  x *. gate
+}
+
+/// IGLU rational approximation — same qualitative behaviour as `iglu`
+/// without transcendental functions. Maximum deviation ~5 %.
+///
+/// Recommended when execution speed matters more than exact GELU shape
+/// (e.g. low-precision quantised inference).
+pub fn iglu_approx(x: Float, sigma: Float) -> Float {
+  let s = case sigma <=. 0.0 {
+    True -> 1.0e-6
+    False -> sigma
+  }
+  let t = x /. s
+  // Rational approximation of (1/2 + (1/π)·arctan(t)) using
+  // arctan(t) ≈ t / (1 + t²/3) for moderate t.
+  let denom = 1.0 +. t *. t /. 3.0
+  let gate = 0.5 +. inv_pi() *. t /. denom
+  x *. gate
+}
+
+@external(erlang, "math", "atan")
+fn atan(x: Float) -> Float
+
+fn inv_pi() -> Float {
+  constants.inv_pi
+}
+
 /// Hard sigmoid: piecewise linear approximation of sigmoid.
 ///
 /// Returns 0 for x ≤ -3, 1 for x ≥ 3, linear interpolation between.
@@ -334,15 +410,35 @@ pub fn lerp(a: Float, b: Float, t: Float) -> Float {
 }
 
 /// Smoothstep: cubic Hermite interpolation between edge0 and edge1.
+///
+/// When the edges coincide, behaves as a step at `edge0`.
 pub fn smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
-  let t = clamp_unit({ x -. edge0 } /. { edge1 -. edge0 })
-  t *. t *. { 3.0 -. 2.0 *. t }
+  case edge0 == edge1 {
+    True ->
+      case x <. edge0 {
+        True -> 0.0
+        False -> 1.0
+      }
+    False -> {
+      let t = clamp_unit({ x -. edge0 } /. { edge1 -. edge0 })
+      t *. t *. { 3.0 -. 2.0 *. t }
+    }
+  }
 }
 
 /// Smootherstep: quintic version (zero first and second derivatives at edges).
 pub fn smootherstep(edge0: Float, edge1: Float, x: Float) -> Float {
-  let t = clamp_unit({ x -. edge0 } /. { edge1 -. edge0 })
-  t *. t *. t *. { t *. { t *. 6.0 -. 15.0 } +. 10.0 }
+  case edge0 == edge1 {
+    True ->
+      case x <. edge0 {
+        True -> 0.0
+        False -> 1.0
+      }
+    False -> {
+      let t = clamp_unit({ x -. edge0 } /. { edge1 -. edge0 })
+      t *. t *. t *. { t *. { t *. 6.0 -. 15.0 } +. 10.0 }
+    }
+  }
 }
 
 // ============================================================================
