@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - 2025-01-24
+## [1.2.0] - 2026-01-24
 
 ### Added
 
@@ -42,16 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Validated
 
-- All formulas validated by DeepSeek R1 671B via HuggingFace (2025-01-24)
+- All formulas validated by DeepSeek R1 671B via HuggingFace (2026-01-24)
 - 58 tests passing
 
 ### References
 
-- DeepSeek R1 671B (2025) - Formula proposals and validation
+- DeepSeek R1 671B (2026) - Formula proposals and validation
 - Euler-Maruyama method for stochastic differential equations
 - Rényi (1961) "On measures of entropy and information"
 
-## [1.1.0] - 2025-01-24
+## [1.1.0] - 2026-01-24
 
 ### Added
 
@@ -74,10 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### References
 
-- DeepSeek R1 671B (2025) - Mathematical validation
+- DeepSeek R1 671B (2026) - Mathematical validation
 - Parr & Friston (2019) "Generalised free energy and active inference"
 
-## [1.0.0] - 2025-01-23
+## [1.0.0] - 2026-01-23
 
 ### Added
 

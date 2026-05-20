@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/gabrielmaialva33/viva_math/discussions
+    about: Ask usage questions, discuss numerical design, or propose ideas before opening an issue.
+  - name: viva_emotion downstream issues
+    url: https://github.com/gabrielmaialva33/viva_emotion/issues
+    about: Report issues that only reproduce in the viva_emotion downstream consumer.

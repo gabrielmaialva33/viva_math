@@ -1,12 +1,12 @@
 name = "viva_math"
-version = "1.2.0"
+version = "1.2.100"
 description = "Core mathematical functions for VIVA - sentient digital life. PAD emotions, Cusp catastrophe, Free Energy Principle, attractor dynamics."
 licences = ["MIT"]
 repository = { type = "github", user = "gabrielmaialva33", repo = "viva_math" }
 links = [
   { title = "GitHub", href = "https://github.com/gabrielmaialva33/viva_math" },
 ]
-gleam = ">= 1.4.0"
+gleam = ">= 1.14.0"
 
 # Targets both Erlang and JavaScript
 target = "erlang"
