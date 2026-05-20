@@ -50,9 +50,9 @@ pub fn emotional_attractors() -> List(Attractor) {
     Attractor(name: "serenity", position: Vec3(0.45, -0.42, 0.21)),
     // Negative emotions
     Attractor(name: "sadness", position: Vec3(-0.63, -0.27, -0.33)),
-    Attractor(name: "fear", position: Vec3(-0.64, 0.60, -0.43)),
+    Attractor(name: "fear", position: Vec3(-0.64, 0.6, -0.43)),
     Attractor(name: "anger", position: Vec3(-0.51, 0.59, 0.25)),
-    Attractor(name: "disgust", position: Vec3(-0.60, 0.35, 0.11)),
+    Attractor(name: "disgust", position: Vec3(-0.6, 0.35, 0.11)),
   ]
 }
 
@@ -212,7 +212,11 @@ pub fn ou_mean_reversion(
 /// Check if point is in basin of an attractor.
 ///
 /// A point is "in" a basin if that attractor has the highest weight.
-pub fn in_basin(point: Vec3, attractor: Attractor, all: List(Attractor)) -> Bool {
+pub fn in_basin(
+  point: Vec3,
+  attractor: Attractor,
+  all: List(Attractor),
+) -> Bool {
   case nearest(point, all) {
     Ok(near) -> near.name == attractor.name
     Error(Nil) -> False
@@ -240,7 +244,12 @@ pub fn blend_attractors(a: Attractor, b: Attractor, t: Float) -> Attractor {
 }
 
 /// Create a custom attractor from name and PAD values.
-pub fn create(name: String, pleasure: Float, arousal: Float, dominance: Float) -> Attractor {
+pub fn create(
+  name: String,
+  pleasure: Float,
+  arousal: Float,
+  dominance: Float,
+) -> Attractor {
   Attractor(name: name, position: vector.pad(pleasure, arousal, dominance))
 }
 
@@ -252,9 +261,10 @@ pub fn dominant_dimension(attractor: Attractor) -> String {
 
   case p >=. a && p >=. d {
     True -> "pleasure"
-    False -> case a >=. d {
-      True -> "arousal"
-      False -> "dominance"
-    }
+    False ->
+      case a >=. d {
+        True -> "arousal"
+        False -> "dominance"
+      }
   }
 }

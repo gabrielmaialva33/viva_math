@@ -139,9 +139,8 @@ pub fn would_jump(x: Float, params: CuspParams) -> Bool {
     Monostable(_) -> False
     Bistable(lower, unstable, upper) -> {
       // Check if state is on opposite side of unstable point from its attractor
-      let at_lower = float.absolute_value(x -. lower) <. float.absolute_value(
-        x -. upper,
-      )
+      let at_lower =
+        float.absolute_value(x -. lower) <. float.absolute_value(x -. upper)
       case at_lower {
         True -> x >. unstable
         // Was attracted to lower but crossed unstable
@@ -341,7 +340,8 @@ pub fn stochastic_gradient(
   params: StochasticCuspParams,
   step: Int,
 ) -> Float {
-  let deterministic = gradient(x, CuspParams(alpha: params.alpha, beta: params.beta))
+  let deterministic =
+    gradient(x, CuspParams(alpha: params.alpha, beta: params.beta))
   let noise = common.deterministic_noise(step, params.seed)
   deterministic +. params.sigma *. noise
 }
