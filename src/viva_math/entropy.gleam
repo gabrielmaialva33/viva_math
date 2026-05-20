@@ -119,8 +119,7 @@ pub fn kl_divergence_smoothed(
     True, False -> {
       // q' = (q + eps) / Σ(q + eps) to keep it a probability distribution
       let smoothed_unnorm = list.map(q, fn(qi) { qi +. eps })
-      let total =
-        list.fold(smoothed_unnorm, 0.0, fn(acc, x) { acc +. x })
+      let total = list.fold(smoothed_unnorm, 0.0, fn(acc, x) { acc +. x })
       case total <=. 0.0 {
         True -> Error(Nil)
         False -> {

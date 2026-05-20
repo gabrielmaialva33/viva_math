@@ -219,12 +219,7 @@ pub fn mul3(a: Dual3, b: Dual3) -> Dual3 {
 
 pub fn exp3(a: Dual3) -> Dual3 {
   let v = scalar.exp(a.value)
-  Dual3(
-    v,
-    v *. a.partial_x,
-    v *. a.partial_y,
-    v *. a.partial_z,
-  )
+  Dual3(v, v *. a.partial_x, v *. a.partial_y, v *. a.partial_z)
 }
 
 /// Gradient ∇f at point (x, y, z).

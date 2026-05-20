@@ -24,7 +24,8 @@ pub fn main() {
   let seed = random.from_int(7)
   let dt = 0.1
   let steps = 50
-  let #(trajectory, _) = ode.integrate_sde(drift, diffusion, 0.0, x0, dt, steps, seed)
+  let #(trajectory, _) =
+    ode.integrate_sde(drift, diffusion, 0.0, x0, dt, steps, seed)
 
   io.println("Time series of valence x(t):")
   list.each(trajectory, fn(pair) {
@@ -38,7 +39,10 @@ pub fn main() {
     Error(_) -> 0.0
   }
   let state = vector.Vec3(last, 0.0, 0.0)
-  io.println("\nFinal emotion (nearest Mehrabian attractor): " <> attractor.classify_emotion(state))
+  io.println(
+    "\nFinal emotion (nearest Mehrabian attractor): "
+    <> attractor.classify_emotion(state),
+  )
 }
 
 @external(erlang, "erlang", "float_to_binary")

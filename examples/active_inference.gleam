@@ -15,9 +15,9 @@ pub fn main() {
 
   // Three candidate policies, each labelled with predicted outcome + uncertainty.
   let policies = [
-    #("approach",   vector.Vec3(0.6, -0.2, 0.4), 0.1),
-    #("withdraw",   vector.Vec3(0.1, 0.1, -0.3),  0.5),
-    #("freeze",     vector.Vec3(0.0, 0.0, 0.0),  0.8),
+    #("approach", vector.Vec3(0.6, -0.2, 0.4), 0.1),
+    #("withdraw", vector.Vec3(0.1, 0.1, -0.3), 0.5),
+    #("freeze", vector.Vec3(0.0, 0.0, 0.0), 0.8),
   ]
 
   io.println("Policy posterior (softmax of -β · G):")

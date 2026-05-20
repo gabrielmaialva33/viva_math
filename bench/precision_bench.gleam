@@ -58,9 +58,7 @@ pub fn main() {
   let _ = precision.moments_skewness(m)
   let _ = precision.moments_excess_kurtosis(m)
   io.println(
-    "  10k samples, single-pass Welford+Pébay → "
-    <> int_to_str(t1 - t0)
-    <> "ns",
+    "  10k samples, single-pass Welford+Pébay → " <> int_to_str(t1 - t0) <> "ns",
   )
 
   io.println("\nDone.\n")

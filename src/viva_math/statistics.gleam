@@ -323,9 +323,11 @@ pub fn moving_average(
       let body = list.drop(xs, window)
       let initial_sum = sum(head)
       let window_float = int_to_float(window)
-      Ok(roll_loop(head, body, initial_sum, window_float, [
-        initial_sum /. window_float,
-      ]))
+      Ok(
+        roll_loop(head, body, initial_sum, window_float, [
+          initial_sum /. window_float,
+        ]),
+      )
     }
   }
 }

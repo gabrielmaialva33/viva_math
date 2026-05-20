@@ -649,10 +649,7 @@ fn meta_pairs(errors: List(Vec3), acc: List(Vec3)) -> List(Vec3) {
 /// `lr` is the learning rate (step size); typical values 0.01–0.1 for stable
 /// inference. The bottom layer's μ is left untouched — it represents the
 /// sensory observation and is fixed during inference.
-pub fn hierarchical_inference_step(
-  h: Hierarchical,
-  lr: Float,
-) -> Hierarchical {
+pub fn hierarchical_inference_step(h: Hierarchical, lr: Float) -> Hierarchical {
   case h.layers {
     [] -> h
     [_] -> h
@@ -698,11 +695,7 @@ fn inference_walk(
 
 /// Run `n` inference steps. Convenience wrapper around
 /// `hierarchical_inference_step`.
-pub fn hierarchical_infer(
-  h: Hierarchical,
-  lr: Float,
-  n: Int,
-) -> Hierarchical {
+pub fn hierarchical_infer(h: Hierarchical, lr: Float, n: Int) -> Hierarchical {
   case n <= 0 {
     True -> h
     False -> hierarchical_infer(hierarchical_inference_step(h, lr), lr, n - 1)

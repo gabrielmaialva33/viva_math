@@ -119,11 +119,7 @@ pub fn lambda_gelu_recovers_gelu_test() {
   // λ=1 must equal standard GELU exactly.
   let xs = [-2.0, -0.5, 0.0, 0.5, 2.0]
   let _ = xs
-  should.be_true(approx(
-    scalar.lambda_gelu(1.0, 1.0),
-    scalar.gelu(1.0),
-    1.0e-12,
-  ))
+  should.be_true(approx(scalar.lambda_gelu(1.0, 1.0), scalar.gelu(1.0), 1.0e-12))
   should.be_true(approx(
     scalar.lambda_gelu(-1.0, 1.0),
     scalar.gelu(-1.0),
@@ -133,25 +129,13 @@ pub fn lambda_gelu_recovers_gelu_test() {
 
 pub fn lambda_gelu_clamps_below_one_test() {
   // λ < 1 is rejected and treated as λ = 1.
-  should.be_true(approx(
-    scalar.lambda_gelu(1.0, 0.0),
-    scalar.gelu(1.0),
-    1.0e-12,
-  ))
+  should.be_true(approx(scalar.lambda_gelu(1.0, 0.0), scalar.gelu(1.0), 1.0e-12))
 }
 
 pub fn lambda_gelu_approaches_relu_test() {
   // As λ grows, λ-GELU(x>0) → x, λ-GELU(x<0) → 0.
-  should.be_true(approx(
-    scalar.lambda_gelu(2.0, 100.0),
-    2.0,
-    1.0e-3,
-  ))
-  should.be_true(approx(
-    scalar.lambda_gelu(-2.0, 100.0),
-    0.0,
-    1.0e-3,
-  ))
+  should.be_true(approx(scalar.lambda_gelu(2.0, 100.0), 2.0, 1.0e-3))
+  should.be_true(approx(scalar.lambda_gelu(-2.0, 100.0), 0.0, 1.0e-3))
 }
 
 pub fn iglu_zero_at_zero_test() {
@@ -162,7 +146,8 @@ pub fn iglu_approx_close_to_iglu_test() {
   // Approximation must stay within ~5 % of exact IGLU on moderate inputs.
   let xs = [-2.0, -0.5, 0.5, 2.0]
   let _ = xs
-  let err = float.absolute_value(scalar.iglu_approx(1.0, 1.0) -. scalar.iglu(1.0, 1.0))
+  let err =
+    float.absolute_value(scalar.iglu_approx(1.0, 1.0) -. scalar.iglu(1.0, 1.0))
   should.be_true(err <. 0.06)
 }
 
@@ -249,7 +234,8 @@ pub fn bpc_update_mean_weighted_average_test() {
 pub fn bpc_update_no_likelihood_keeps_prior_test() {
   let prior =
     free_energy.GaussianBelief(mean: vector.Vec3(0.5, 0.0, 0.0), precision: 2.0)
-  let posterior = free_energy.bpc_update(prior, vector.Vec3(99.0, 99.0, 99.0), 0.0)
+  let posterior =
+    free_energy.bpc_update(prior, vector.Vec3(99.0, 99.0, 99.0), 0.0)
   should.equal(posterior.mean, prior.mean)
 }
 
@@ -285,9 +271,11 @@ pub fn pebay_kurtosis_normal_like_test() {
     ])
   let _ = m
   let assert Ok(k) =
-    precision.moments_excess_kurtosis(precision.moments_from_list([
-      -3.0, -2.0, -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0,
-    ]))
+    precision.moments_excess_kurtosis(
+      precision.moments_from_list([
+        -3.0, -2.0, -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 3.0,
+      ]),
+    )
   // Just verify the computation produces a finite number; sign depends on
   // platykurtosis of this specific sample.
   should.be_true(float.absolute_value(k) <. 100.0)
@@ -299,9 +287,5 @@ pub fn pebay_kurtosis_normal_like_test() {
 
 pub fn lambda_gelu_uses_correct_inv_sqrt_2_test() {
   // Verify the constant used in λ-GELU formula equals 1/√2
-  should.be_true(approx(
-    constants.inv_sqrt_2 *. constants.sqrt_2,
-    1.0,
-    1.0e-12,
-  ))
+  should.be_true(approx(constants.inv_sqrt_2 *. constants.sqrt_2, 1.0, 1.0e-12))
 }

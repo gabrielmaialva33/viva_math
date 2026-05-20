@@ -22,7 +22,11 @@ pub fn main() {
     ode.rk2_midpoint(f, 0.0, 1.0, 0.1),
     expected_short,
   )
-  step_report("rk2_heun        ", ode.rk2_heun(f, 0.0, 1.0, 0.1), expected_short)
+  step_report(
+    "rk2_heun        ",
+    ode.rk2_heun(f, 0.0, 1.0, 0.1),
+    expected_short,
+  )
   step_report("rk4             ", ode.rk4(f, 0.0, 1.0, 0.1), expected_short)
   let #(rkf45_x, _) = ode.rkf45(f, 0.0, 1.0, 0.1)
   step_report("rkf45           ", rkf45_x, expected_short)
