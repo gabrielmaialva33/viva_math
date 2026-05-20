@@ -109,11 +109,14 @@ pub fn gaussian_kl_divergence(
   }
 }
 
-/// Full KL divergence between Gaussians with different variances.
+/// Full KL divergence between multivariate isotropic Gaussians with
+/// different (scalar) variances in d=3 dimensions (Vec3).
 ///
-/// D_KL(N(μ₁,σ₁²) || N(μ₂,σ₂²)) = log(σ₂/σ₁) + (σ₁² + (μ₁-μ₂)²)/(2σ₂²) - 1/2
+/// D_KL(N(μ₁, σ₁² I_d) || N(μ₂, σ₂² I_d))
+///   = (d/2) · ln(σ₂² / σ₁²) + (d·σ₁² + |μ₁-μ₂|²) / (2σ₂²) - d/2
 ///
-/// This is the complete formula from DeepSeek R1 validation.
+/// For d=1 and equal variances this reduces to `(μ₁-μ₂)² / (2σ²)`, matching
+/// `gaussian_kl_divergence/3`.
 pub fn gaussian_kl_divergence_full(
   posterior_mean: Vec3,
   prior_mean: Vec3,
@@ -123,25 +126,24 @@ pub fn gaussian_kl_divergence_full(
   case posterior_variance <=. 0.0 || prior_variance <=. 0.0 {
     True -> 0.0
     False -> {
+      let d = 3.0
       let diff_squared = vector.distance_squared(posterior_mean, prior_mean)
 
-      // log(σ₂) - log(σ₁) = 0.5 * (log(σ₂²) - log(σ₁²))
-      // Using separate logs for numerical stability when variances are small
-      let log_ratio = case
+      // 0.5 · d · (ln σ₂² - ln σ₁²) — separate logs for stability.
+      let log_term = case
         maths.natural_logarithm(prior_variance),
         maths.natural_logarithm(posterior_variance)
       {
         Ok(log_prior), Ok(log_posterior) ->
-          { log_prior -. log_posterior } /. 2.0
+          0.5 *. d *. { log_prior -. log_posterior }
         _, _ -> 0.0
       }
 
-      // (σ₁² + (μ₁-μ₂)²) / (2σ₂²) term
+      // (d·σ₁² + |μ₁-μ₂|²) / (2σ₂²)
       let ratio_term =
-        { posterior_variance +. diff_squared } /. { 2.0 *. prior_variance }
+        { d *. posterior_variance +. diff_squared } /. { 2.0 *. prior_variance }
 
-      // Full KL: log(σ₂/σ₁) + (σ₁² + (μ₁-μ₂)²)/(2σ₂²) - 1/2
-      log_ratio +. ratio_term -. 0.5
+      log_term +. ratio_term -. d /. 2.0
     }
   }
 }
@@ -495,27 +497,214 @@ pub fn policy_posterior(
   preferred_outcome: Vec3,
   beta: Float,
 ) -> List(#(a, Float)) {
-  let gs =
-    list.map(policies, fn(p) {
-      let #(label, outcome, uncertainty) = p
-      let g = expected_free_energy(outcome, preferred_outcome, uncertainty)
-      #(label, 0.0 -. beta *. g.total)
-    })
-
-  // Max subtraction for stability.
-  let max_g =
-    list.fold(gs, -1.0e300, fn(acc, pair) {
-      case pair.1 >. acc {
-        True -> pair.1
-        False -> acc
+  case policies {
+    [] -> []
+    [first, ..rest] -> {
+      let to_logit = fn(triple) {
+        let #(label, outcome, uncertainty) = triple
+        let g = expected_free_energy(outcome, preferred_outcome, uncertainty)
+        #(label, 0.0 -. beta *. g.total)
       }
-    })
-  let exps =
-    list.map(gs, fn(pair) { #(pair.0, maths.exponential(pair.1 -. max_g)) })
-  let total = list.fold(exps, 0.0, fn(acc, pair) { acc +. pair.1 })
-  case total == 0.0 {
-    True -> list.map(policies, fn(p) { #(p.0, 0.0) })
-    False -> list.map(exps, fn(pair) { #(pair.0, pair.1 /. total) })
+      let first_logit = to_logit(first)
+      let rest_logits = list.map(rest, to_logit)
+      let gs = [first_logit, ..rest_logits]
+
+      // Initialise max with the first logit to avoid arbitrary sentinels.
+      let max_g =
+        list.fold(rest_logits, first_logit.1, fn(acc, pair) {
+          case pair.1 >. acc {
+            True -> pair.1
+            False -> acc
+          }
+        })
+      let exps =
+        list.map(gs, fn(pair) { #(pair.0, maths.exponential(pair.1 -. max_g)) })
+      let total = list.fold(exps, 0.0, fn(acc, pair) { acc +. pair.1 })
+      case total == 0.0 {
+        True -> list.map(gs, fn(pair) { #(pair.0, 0.0) })
+        False -> list.map(exps, fn(pair) { #(pair.0, pair.1 /. total) })
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Hierarchical predictive coding (Meta-PCN / S-HAI 2025-2026)
+// ============================================================================
+
+/// A single layer of a hierarchical predictive-coding network.
+///
+/// Stores the layer's state estimate `mu`, the precision (inverse variance)
+/// of its prediction errors, and the precision of the prior over the layer
+/// state. Higher layers send top-down predictions; bottom-up prediction
+/// errors travel upward. See Friston (2010), Bogacz (2017), and the 2026
+/// Meta-PCN framework for the modern formulation.
+pub type HierarchicalLayer {
+  HierarchicalLayer(
+    /// Posterior mean at this layer (the latent state estimate).
+    mu: Vec3,
+    /// Precision of prediction errors flowing up from this layer.
+    precision: Float,
+    /// Precision of the prior over this layer's state.
+    prior_precision: Float,
+  )
+}
+
+/// A hierarchical predictive coding network: a stack of layers from
+/// sensory (head) to abstract (tail). Used for active inference planning
+/// at multiple scales (S-HAI 2026).
+pub type Hierarchical {
+  Hierarchical(layers: List(HierarchicalLayer))
+}
+
+/// Per-layer prediction error: e_l = mu_l - g(mu_{l+1}).
+///
+/// In the simplest linear PC model, `g` is the identity. For richer models
+/// pass a custom decoder via `hierarchical_errors_with`.
+pub fn hierarchical_errors(h: Hierarchical) -> List(Vec3) {
+  hierarchical_errors_with(h, fn(top_down) { top_down })
+}
+
+/// Hierarchical prediction errors with custom top-down decoder.
+pub fn hierarchical_errors_with(
+  h: Hierarchical,
+  decoder: fn(Vec3) -> Vec3,
+) -> List(Vec3) {
+  case h.layers {
+    [] -> []
+    [_] -> []
+    _ -> errors_pairs(h.layers, decoder, [])
+  }
+}
+
+fn errors_pairs(
+  layers: List(HierarchicalLayer),
+  decoder: fn(Vec3) -> Vec3,
+  acc: List(Vec3),
+) -> List(Vec3) {
+  case layers {
+    [lower, upper, ..rest] -> {
+      let prediction = decoder(upper.mu)
+      let err = vector.sub(lower.mu, prediction)
+      errors_pairs([upper, ..rest], decoder, [err, ..acc])
+    }
+    _ -> list.reverse(acc)
+  }
+}
+
+/// Hierarchical free energy summed across layers.
+///
+/// F_total = Σ_l Π_l · |e_l|² where e_l is the prediction error between
+/// layer l and the top-down prediction from layer l+1. This is the variant
+/// Meta-PCN (ICLR 2026) regularises with weight-variance normalisation to
+/// avoid exploding errors in deep networks.
+pub fn hierarchical_free_energy(h: Hierarchical) -> Float {
+  let errors = hierarchical_errors(h)
+  let layers = case h.layers {
+    [_, ..rest] -> rest
+    [] -> []
+  }
+  list.zip(layers, errors)
+  |> list.fold(0.0, fn(acc, pair) {
+    let #(upper, err) = pair
+    acc +. upper.precision *. vector.dot(err, err)
+  })
+}
+
+/// Meta-prediction error: prediction error of the prediction error.
+///
+/// Meta-PCN (Lin et al. ICLR 2026) shows that minimising "PEs of PEs"
+/// linearises the otherwise non-linear PCN equilibrium dynamics, yielding
+/// dramatically more stable inference at depth.
+///
+/// meta_e_l = e_l - h(e_{l+1})  where h is typically identity for the
+/// simplest case.
+pub fn meta_prediction_errors(h: Hierarchical) -> List(Vec3) {
+  let errors = hierarchical_errors(h)
+  case errors {
+    [] -> []
+    [_] -> errors
+    _ -> meta_pairs(errors, [])
+  }
+}
+
+fn meta_pairs(errors: List(Vec3), acc: List(Vec3)) -> List(Vec3) {
+  case errors {
+    [lower, upper, ..rest] -> {
+      let meta = vector.sub(lower, upper)
+      meta_pairs([upper, ..rest], [meta, ..acc])
+    }
+    _ -> list.reverse(acc)
+  }
+}
+
+// ============================================================================
+// Bayesian Predictive Coding (BPC) — closed-form weight update
+// ============================================================================
+
+/// Posterior over a Gaussian belief: mean and precision (inverse variance).
+///
+/// BPC tracks the full posterior over hidden states instead of just MAP
+/// estimates. Closed-form Hebbian updates (Vasilescu & Friston 2025,
+/// arXiv:2503.24016) preserve the locality of PC while quantifying
+/// epistemic uncertainty.
+pub type GaussianBelief {
+  GaussianBelief(mean: Vec3, precision: Float)
+}
+
+/// Precision-weighted Bayesian update for a Gaussian belief from a single
+/// observation under Gaussian likelihood.
+///
+/// posterior_precision = prior_precision + likelihood_precision
+/// posterior_mean = (prior_precision · prior_mean +
+///                   likelihood_precision · observation) / posterior_precision
+///
+/// Returns the new belief. This is the closed-form variant central to BPC.
+pub fn bpc_update(
+  prior: GaussianBelief,
+  observation: Vec3,
+  likelihood_precision: Float,
+) -> GaussianBelief {
+  let total = prior.precision +. likelihood_precision
+  case total <=. 0.0 {
+    True -> prior
+    False -> {
+      let weighted_prior = vector.scale(prior.mean, prior.precision)
+      let weighted_obs = vector.scale(observation, likelihood_precision)
+      let new_mean = vector.scale(vector.add(weighted_prior, weighted_obs), 1.0 /. total)
+      GaussianBelief(mean: new_mean, precision: total)
+    }
+  }
+}
+
+/// Hebbian variance update: the BPC weight-rule equivalent of synaptic
+/// plasticity. Updates precision based on prediction-error magnitude.
+///
+/// new_precision = (count · prior_precision + 1) /
+///                 (count · variance + |error|²)
+///
+/// Higher errors → lower precision; consistent observations → higher
+/// precision. Equivalent to a conjugate Normal-Gamma update.
+pub fn bpc_precision_update(
+  current_precision: Float,
+  error_squared: Float,
+  observation_count: Int,
+) -> Float {
+  let n = int_to_float(observation_count)
+  case observation_count {
+    0 -> current_precision
+    _ -> {
+      let variance_estimate = case current_precision <=. 0.0 {
+        True -> 1.0
+        False -> 1.0 /. current_precision
+      }
+      let num = n *. current_precision +. 1.0
+      let denom = n *. variance_estimate +. error_squared
+      case denom <=. 0.0 {
+        True -> current_precision
+        False -> num /. denom
+      }
+    }
   }
 }
 
