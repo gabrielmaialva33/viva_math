@@ -171,10 +171,22 @@ pub fn mat3_trace(m: Mat3) -> Float {
   m.m11 +. m.m22 +. m.m33
 }
 
-/// Inverse of a 3×3 matrix via adjugate / determinant. Errors if singular.
+/// Inverse of a 3×3 matrix via adjugate / determinant.
+///
+/// Errors when the matrix is singular or ill-conditioned: the threshold is
+/// `|det| < ε · ‖M‖_F³` where ε ≈ machine epsilon. Pure `det == 0.0` is too
+/// permissive — matrices with `det = 1e-20` would still pass and produce
+/// catastrophic blow-up after division.
 pub fn mat3_inverse(m: Mat3) -> Result(Mat3, Nil) {
   let det = mat3_determinant(m)
-  case det == 0.0 {
+  let frob = mat3_frobenius(m)
+  // Cube the Frobenius norm so the threshold scales like a determinant.
+  let tolerance = 2.22e-16 *. frob *. frob *. frob
+  let det_abs = case det <. 0.0 {
+    True -> 0.0 -. det
+    False -> det
+  }
+  case det_abs <=. tolerance {
     True -> Error(Nil)
     False -> {
       let inv_det = 1.0 /. det
@@ -221,6 +233,30 @@ pub fn mat3_rot_z(theta: Float) -> Mat3 {
   let c = cosine(theta)
   let s = sine(theta)
   Mat3(c, 0.0 -. s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0)
+}
+
+/// Frobenius norm √(Σ aᵢⱼ²) of a Mat3.
+pub fn mat3_frobenius(m: Mat3) -> Float {
+  scalar.sqrt(
+    m.m11
+    *. m.m11
+    +. m.m12
+    *. m.m12
+    +. m.m13
+    *. m.m13
+    +. m.m21
+    *. m.m21
+    +. m.m22
+    *. m.m22
+    +. m.m23
+    *. m.m23
+    +. m.m31
+    *. m.m31
+    +. m.m32
+    *. m.m32
+    +. m.m33
+    *. m.m33,
+  )
 }
 
 /// Diagonal matrix.
@@ -308,9 +344,9 @@ pub fn matn_zeros(rows: Int, cols: Int) -> MatN {
 /// Identity matrix of size n.
 pub fn matn_identity(n: Int) -> MatN {
   let data =
-    list.range(0, n - 1)
+    range_int(0, n - 1)
     |> list.map(fn(i) {
-      list.range(0, n - 1)
+      range_int(0, n - 1)
       |> list.map(fn(j) {
         case i == j {
           True -> 1.0
@@ -332,7 +368,7 @@ fn transpose_lists(rows: List(List(Float))) -> List(List(Float)) {
     [] -> []
     [first, ..] -> {
       let n = list.length(first)
-      list.range(0, n - 1)
+      range_int(0, n - 1)
       |> list.map(fn(col) {
         list.map(rows, fn(row) {
           case list_at(row, col) {
@@ -442,3 +478,14 @@ fn cosine(x: Float) -> Float
 
 @external(erlang, "math", "sin")
 fn sine(x: Float) -> Float
+
+fn range_int(from: Int, to: Int) -> List(Int) {
+  range_loop(from, to, [])
+}
+
+fn range_loop(from: Int, to: Int, acc: List(Int)) -> List(Int) {
+  case from > to {
+    True -> list.reverse(acc)
+    False -> range_loop(from + 1, to, [from, ..acc])
+  }
+}
