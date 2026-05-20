@@ -366,7 +366,12 @@ fn weighted_mean_helper(
       }
     [p, ..rest] -> {
       let idx_float = int_to_float(index)
-      weighted_mean_helper(rest, index + 1, sum +. p *. idx_float, weight_sum +. p)
+      weighted_mean_helper(
+        rest,
+        index + 1,
+        sum +. p *. idx_float,
+        weight_sum +. p,
+      )
     }
   }
 }
@@ -413,6 +418,56 @@ fn power(base: Float, exponent: Float) -> Float {
       case maths.natural_logarithm(base) {
         Ok(ln_base) -> maths.exponential(exponent *. ln_base)
         Error(_) -> 0.0
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Tsallis & differential entropy (extensions)
+// ============================================================================
+
+/// Tsallis entropy S_q(X) = (1 - Σ pᵢ^q) / (q - 1).
+///
+/// Generalises Shannon (q → 1) and Rényi. q < 1 emphasises rare events,
+/// q > 1 emphasises modes. Used in non-extensive statistical mechanics and
+/// to model heavy-tailed emotional distributions.
+pub fn tsallis(probabilities: List(Float), q: Float) -> Result(Float, Nil) {
+  case q == 1.0 {
+    True -> Ok(shannon(probabilities))
+    False -> {
+      let sum_p_q =
+        list.fold(probabilities, 0.0, fn(acc, p) {
+          case p <=. 0.0 {
+            True -> acc
+            False -> acc +. power(p, q)
+          }
+        })
+      Ok({ 1.0 -. sum_p_q } /. { q -. 1.0 })
+    }
+  }
+}
+
+/// Fisher information for a Gaussian distribution: I(σ) = 1 / σ².
+///
+/// Measures how much information an observation carries about the mean.
+pub fn fisher_information_gaussian(sigma: Float) -> Result(Float, Nil) {
+  case sigma <=. 0.0 {
+    True -> Error(Nil)
+    False -> Ok(1.0 /. { sigma *. sigma })
+  }
+}
+
+/// Differential entropy of a Gaussian: h(N(μ, σ²)) = ½ ln(2πeσ²).
+pub fn differential_entropy_gaussian(sigma: Float) -> Result(Float, Nil) {
+  case sigma <=. 0.0 {
+    True -> Error(Nil)
+    False -> {
+      // 2πe ≈ 17.07946844534713
+      let two_pi_e = 17.07946844534713
+      case maths.natural_logarithm(two_pi_e *. sigma *. sigma) {
+        Ok(ln_val) -> Ok(0.5 *. ln_val)
+        Error(_) -> Error(Nil)
       }
     }
   }
