@@ -316,25 +316,36 @@ pub fn moving_average(
   let n = list.length(xs)
   case window < 1 || window > n {
     True -> Error(Nil)
-    False -> Ok(moving_average_loop(xs, window, []))
+    False -> {
+      // Rolling sum in O(n): seed with sum of first `window`, then for each
+      // step subtract the leaving element and add the entering one.
+      let head = list.take(xs, window)
+      let body = list.drop(xs, window)
+      let initial_sum = sum(head)
+      let window_float = int_to_float(window)
+      Ok(roll_loop(head, body, initial_sum, window_float, [
+        initial_sum /. window_float,
+      ]))
+    }
   }
 }
 
-fn moving_average_loop(
-  xs: List(Float),
-  window: Int,
+fn roll_loop(
+  leaving: List(Float),
+  entering: List(Float),
+  running_sum: Float,
+  window_float: Float,
   acc: List(Float),
 ) -> List(Float) {
-  case list.length(xs) < window {
-    True -> list.reverse(acc)
-    False -> {
-      let head = list.take(xs, window)
-      let avg = sum(head) /. int_to_float(window)
-      case xs {
-        [_, ..rest] -> moving_average_loop(rest, window, [avg, ..acc])
-        [] -> list.reverse(acc)
-      }
+  case leaving, entering {
+    [out, ..lrest], [in_v, ..erest] -> {
+      let new_sum = running_sum -. out +. in_v
+      roll_loop(lrest, erest, new_sum, window_float, [
+        new_sum /. window_float,
+        ..acc
+      ])
     }
+    _, _ -> list.reverse(acc)
   }
 }
 
