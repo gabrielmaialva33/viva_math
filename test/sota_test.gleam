@@ -170,18 +170,20 @@ pub fn iglu_approx_close_to_iglu_test() {
 // DOP853 - high-precision ODE step
 // ============================================================================
 
-pub fn dop853_exp_single_step_test() {
+pub fn dop54_exp_single_step_test() {
+  // dx/dt = x, x(0)=1 → x(0.1) = e^0.1.
+  // Dormand-Prince 5(4) single-step error is empirically ~3·10⁻¹⁰.
   let f = fn(_t: Float, x: Float) { x }
-  let #(x_new, err) = ode.dop853(f, 0.0, 1.0, 0.1)
+  let #(x_new, err) = ode.dop54(f, 0.0, 1.0, 0.1)
   let expected = 1.1051709180756477
-  should.equal(x_new, expected)
+  should.be_true(approx(x_new, expected, 1.0e-9))
   should.be_true(err >=. 0.0)
 }
 
-pub fn dop853_higher_accuracy_than_rk4_test() {
+pub fn dop54_higher_accuracy_than_rk4_test() {
   // Same problem, single step: DOP853 should beat RK4 dramatically.
   let f = fn(_t: Float, x: Float) { x }
-  let #(x_dop, _) = ode.dop853(f, 0.0, 1.0, 0.1)
+  let #(x_dop, _) = ode.dop54(f, 0.0, 1.0, 0.1)
   let x_rk4 = ode.rk4(f, 0.0, 1.0, 0.1)
   let expected = 1.1051709180756477
   let err_dop = float.absolute_value(x_dop -. expected)
