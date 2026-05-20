@@ -1,65 +1,76 @@
-//// viva_math - Core mathematical functions for VIVA.
+//// viva_math - Mathematical foundations for VIVA's sentient digital life.
 ////
-//// A specialized math library for sentient digital life,
-//// built on top of gleam_community_maths.
+//// A specialized math library for the BEAM, designed to sit between
+//// `gleam_community_maths` (primitives) and `viva_tensor` (tensors + NIF).
 ////
 //// ## Modules
 ////
-//// - `viva_math/common` - Utilities: clamp, sigmoid, softmax, lerp
-//// - `viva_math/vector` - Vec3 type for PAD emotional space
-//// - `viva_math/cusp` - Cusp catastrophe theory
-//// - `viva_math/free_energy` - Free Energy Principle
-//// - `viva_math/attractor` - Emotional attractor dynamics
-//// - `viva_math/entropy` - Information theory
+//// ### Foundations
+//// - `viva_math/scalar`     - Scalar math: erf, gelu, silu, mish, logsumexp...
+//// - `viva_math/constants`  - High-precision constants (pi, e, sqrt_2pi...)
+//// - `viva_math/common`     - Generic helpers: clamp, lerp, sigmoid, softmax
 ////
-//// ## Dependencies
+//// ### Geometry & linear algebra
+//// - `viva_math/vector`     - Vec3 (PAD emotional space) + ops
+//// - `viva_math/vec2`       - 2-D vectors (polar, planar)
+//// - `viva_math/vec4`       - 4-D vectors (RGBA, homogeneous, quaternions)
+//// - `viva_math/vecn`       - N-D vectors as List(Float)
+//// - `viva_math/matrix`     - Mat2, Mat3, Mat4 and generic MatN
 ////
-//// Re-exports gleam_community_maths for convenience.
-//// Use `import gleam_community/maths` for:
-//// - Trigonometry (sin, cos, tan, etc.)
-//// - Statistics (mean, variance, etc.)
-//// - Distances (euclidean, manhattan, etc.)
-//// - Constants (pi, e, tau)
+//// ### Stochastic & inference
+//// - `viva_math/random`     - PRNG with opaque Seed (Erlang :rand backed)
+//// - `viva_math/statistics` - mean, var, ema, percentile, correlation
+//// - `viva_math/distributions` - gaussian/uniform/exponential/categorical
+//// - `viva_math/entropy`    - Shannon, KL, JS, Rényi, Tsallis, Fisher
 ////
-//// ## Example
+//// ### Dynamical systems
+//// - `viva_math/cusp`       - Catastrophe theory (Thom)
+//// - `viva_math/free_energy` - Friston FEP + active inference
+//// - `viva_math/attractor`  - Mehrabian PAD attractors + OU dynamics
+//// - `viva_math/ode`        - Euler / RK2 / RK4 / Euler-Maruyama / Milstein
+//// - `viva_math/calculus`   - Finite differences + Simpson / Romberg
+//// - `viva_math/scheduler`  - Cosine annealing, warmup, decay schedules
+////
+//// ## Quick start
 ////
 //// ```gleam
+//// import viva_math/scalar
 //// import viva_math/vector
 //// import viva_math/attractor
-//// import viva_math/cusp
+//// import viva_math/random
 ////
-//// // Create PAD state
+//// // PAD emotional state
 //// let state = vector.pad(-0.3, 0.7, -0.2)
 ////
-//// // Classify emotion
+//// // Classify nearest emotion
 //// let emotion = attractor.classify_emotion(state)
 //// // -> "fear"
 ////
-//// // Check for cusp bistability
-//// let params = cusp.from_arousal_dominance(0.7, -0.2)
-//// let volatile = cusp.is_bistable(params)
-//// // -> True (high arousal creates bistability)
+//// // Scalar activations for ML
+//// let y = scalar.gelu(0.5)
+////
+//// // Seedable, reproducible normal sample
+//// let seed = random.from_int(42)
+//// let #(x, _) = random.normal(seed, 0.0, 1.0)
 //// ```
 
-// Re-export submodules for easy access
 import viva_math/attractor
 import viva_math/common
 import viva_math/cusp
 import viva_math/entropy
 import viva_math/free_energy
+import viva_math/scalar
 import viva_math/vector
 
-/// Library version
-pub const version = "1.1.0"
+/// Library version.
+pub const version = "1.2.0"
 
-/// Create a PAD vector with clamping.
-/// Shorthand for vector.pad/3.
+/// Create a PAD vector with clamping. Shorthand for `vector.pad/3`.
 pub fn pad(pleasure: Float, arousal: Float, dominance: Float) -> vector.Vec3 {
   vector.pad(pleasure, arousal, dominance)
 }
 
 /// Classify emotional state to nearest attractor name.
-/// Shorthand for attractor.classify_emotion/1.
 pub fn classify(state: vector.Vec3) -> String {
   attractor.classify_emotion(state)
 }
@@ -70,29 +81,42 @@ pub fn is_volatile(arousal: Float, dominance: Float) -> Bool {
   |> cusp.is_bistable
 }
 
-/// Compute free energy from expected and actual states.
-/// Uses simplified interface with default precision and thresholds.
+/// Compute free energy from expected and actual states with default precision.
 pub fn free_energy(
   expected: vector.Vec3,
   actual: vector.Vec3,
 ) -> free_energy.FreeEnergyState {
-  // Use neutral baseline and default complexity weight
   let baseline = vector.zero()
   let complexity_weight = 0.1
-  free_energy.compute_state_simple(expected, actual, baseline, complexity_weight)
+  free_energy.compute_state_simple(
+    expected,
+    actual,
+    baseline,
+    complexity_weight,
+  )
 }
 
-/// Compute Shannon entropy of a probability distribution.
+/// Shannon entropy of a probability distribution.
 pub fn entropy(probabilities: List(Float)) -> Float {
   entropy.shannon(probabilities)
 }
 
-/// Standard sigmoid function.
+/// Standard sigmoid σ(x) = 1 / (1 + e^(-x)).
 pub fn sigmoid(x: Float) -> Float {
-  common.sigmoid_standard(x)
+  scalar.sigmoid(x)
 }
 
 /// Clamp value to [-1, 1] range.
 pub fn clamp_bipolar(x: Float) -> Float {
   common.clamp_bipolar(x)
+}
+
+/// Error function. Delegates to `viva_math/scalar.erf` (Erlang `:math.erf`).
+pub fn erf(x: Float) -> Float {
+  scalar.erf(x)
+}
+
+/// GELU activation (exact form using erf).
+pub fn gelu(x: Float) -> Float {
+  scalar.gelu(x)
 }
