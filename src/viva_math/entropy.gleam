@@ -101,6 +101,37 @@ pub fn kl_divergence(p: List(Float), q: List(Float)) -> Result(Float, Nil) {
   }
 }
 
+/// KL divergence with additive smoothing.
+///
+/// Adds `eps` to every q_i before normalising; useful when q contains zeros
+/// where p > 0 (which would otherwise return `Error`). Standard practice in
+/// language modelling and probabilistic ML.
+///
+/// Recommended `eps ∈ [1e-12, 1e-6]`. Larger values bias the result more.
+pub fn kl_divergence_smoothed(
+  p: List(Float),
+  q: List(Float),
+  eps: Float,
+) -> Result(Float, Nil) {
+  case list.length(p) == list.length(q), eps <. 0.0 {
+    False, _ -> Error(Nil)
+    _, True -> Error(Nil)
+    True, False -> {
+      // q' = (q + eps) / Σ(q + eps) to keep it a probability distribution
+      let smoothed_unnorm = list.map(q, fn(qi) { qi +. eps })
+      let total =
+        list.fold(smoothed_unnorm, 0.0, fn(acc, x) { acc +. x })
+      case total <=. 0.0 {
+        True -> Error(Nil)
+        False -> {
+          let q_norm = list.map(smoothed_unnorm, fn(x) { x /. total })
+          kl_divergence(p, q_norm)
+        }
+      }
+    }
+  }
+}
+
 /// Symmetric KL Divergence (Jensen-Shannon divergence without the 1/2).
 ///
 /// D_sym(P, Q) = D_KL(P || Q) + D_KL(Q || P)
