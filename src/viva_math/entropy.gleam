@@ -10,6 +10,7 @@
 import gleam/float
 import gleam/list
 import gleam_community/maths
+import viva_math/precision
 
 /// Shannon entropy: H(X) = -Σ p(x) log₂ p(x)
 ///
@@ -24,17 +25,20 @@ import gleam_community/maths
 /// shannon([0.25, 0.25, 0.25, 0.25]) // -> 2.0
 /// ```
 pub fn shannon(probabilities: List(Float)) -> Float {
-  list.fold(probabilities, 0.0, fn(acc, p) {
-    case p <=. 0.0 {
-      True -> acc
-      // 0 * log(0) = 0 by convention
-      False ->
-        case maths.logarithm_2(p) {
-          Ok(log_p) -> acc -. { p *. log_p }
-          Error(_) -> acc
-        }
-    }
-  })
+  // Build -p · log₂(p) terms, then sum with Neumaier compensation to avoid
+  // cancellation when probabilities span many orders of magnitude.
+  let terms =
+    list.fold(probabilities, [], fn(acc, p) {
+      case p <=. 0.0 {
+        True -> acc
+        False ->
+          case maths.logarithm_2(p) {
+            Ok(log_p) -> [0.0 -. p *. log_p, ..acc]
+            Error(_) -> acc
+          }
+      }
+    })
+  precision.neumaier_sum(terms)
 }
 
 /// Normalized Shannon entropy (0 to 1 range).
@@ -433,7 +437,13 @@ fn power(base: Float, exponent: Float) -> Float {
 /// q > 1 emphasises modes. Used in non-extensive statistical mechanics and
 /// to model heavy-tailed emotional distributions.
 pub fn tsallis(probabilities: List(Float), q: Float) -> Result(Float, Nil) {
-  case q == 1.0 {
+  // Fuzzy compare around q == 1 to avoid catastrophic cancellation:
+  // S_q is continuous at q=1 with limit equal to Shannon entropy.
+  let q_close_to_1 = case q -. 1.0 {
+    d if d <. 0.0 -> 0.0 -. d <. 1.0e-9
+    d -> d <. 1.0e-9
+  }
+  case q_close_to_1 {
     True -> Ok(shannon(probabilities))
     False -> {
       let sum_p_q =

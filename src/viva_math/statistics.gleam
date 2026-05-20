@@ -16,23 +16,23 @@
 import gleam/float
 import gleam/list
 import gleam/order
+import viva_math/precision
 import viva_math/scalar
 
 // ============================================================================
 // Sums & means
 // ============================================================================
 
-/// Sum of a list. Returns 0.0 for empty.
+/// Sum of a list using Neumaier compensated summation. Returns 0.0 for empty.
+///
+/// Recovers up to 16 extra bits of precision vs naive `fold (+.)`.
 pub fn sum(xs: List(Float)) -> Float {
-  list.fold(xs, 0.0, fn(acc, x) { acc +. x })
+  precision.neumaier_sum(xs)
 }
 
-/// Arithmetic mean. Returns an error for empty input.
+/// Arithmetic mean using Neumaier-compensated sum.
 pub fn mean(xs: List(Float)) -> Result(Float, Nil) {
-  case xs {
-    [] -> Error(Nil)
-    _ -> Ok(sum(xs) /. int_to_float(list.length(xs)))
-  }
+  precision.neumaier_mean(xs)
 }
 
 /// Geometric mean: ⁿ√(∏ xᵢ). Requires strictly positive inputs.
@@ -373,47 +373,16 @@ pub fn ema_step(previous: Float, observation: Float, alpha: Float) -> Float {
 // Higher moments
 // ============================================================================
 
-/// Skewness (Fisher-Pearson). Measures asymmetry. 0 = symmetric.
+/// Skewness (Fisher-Pearson) via Pébay online accumulator.
+///
+/// Numerically stable: avoids the cancellation of `Σ(x - μ)³` over a list.
 pub fn skewness(xs: List(Float)) -> Result(Float, Nil) {
-  case mean(xs), stddev(xs) {
-    Ok(mu), Ok(sigma) -> {
-      case sigma == 0.0 {
-        True -> Error(Nil)
-        False -> {
-          let n = int_to_float(list.length(xs))
-          let s =
-            list.fold(xs, 0.0, fn(acc, x) {
-              let z = { x -. mu } /. sigma
-              acc +. z *. z *. z
-            })
-          Ok(s /. n)
-        }
-      }
-    }
-    _, _ -> Error(Nil)
-  }
+  precision.moments_skewness(precision.moments_from_list(xs))
 }
 
-/// Excess kurtosis: E[(z⁴)] - 3. Zero for a Gaussian.
+/// Excess kurtosis via Pébay online accumulator. Zero for a Gaussian.
 pub fn kurtosis(xs: List(Float)) -> Result(Float, Nil) {
-  case mean(xs), stddev(xs) {
-    Ok(mu), Ok(sigma) -> {
-      case sigma == 0.0 {
-        True -> Error(Nil)
-        False -> {
-          let n = int_to_float(list.length(xs))
-          let s =
-            list.fold(xs, 0.0, fn(acc, x) {
-              let z = { x -. mu } /. sigma
-              let z2 = z *. z
-              acc +. z2 *. z2
-            })
-          Ok(s /. n -. 3.0)
-        }
-      }
-    }
-    _, _ -> Error(Nil)
-  }
+  precision.moments_excess_kurtosis(precision.moments_from_list(xs))
 }
 
 // ============================================================================

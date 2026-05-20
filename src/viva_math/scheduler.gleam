@@ -150,9 +150,14 @@ pub fn cosine_warm_restarts(
   t_mult: Int,
   min_lr: Float,
 ) -> Float {
-  let #(current_period, step_in_period) =
-    advance_period(step, period, t_mult, period)
-  cosine_annealing(base_lr, step_in_period, current_period, min_lr)
+  case period <= 0 {
+    True -> base_lr
+    False -> {
+      let #(current_period, step_in_period) =
+        advance_period(step, period, t_mult, period)
+      cosine_annealing(base_lr, step_in_period, current_period, min_lr)
+    }
+  }
 }
 
 fn advance_period(
@@ -239,11 +244,11 @@ pub fn triangle(step: Int, period: Int) -> Float {
   case period <= 0 {
     True -> 0.0
     False -> {
-      let half = int_to_float(period) /. 2.0
-      let pos =
-        int_to_float(step)
-        -. half
-        *. float_floor_div(int_to_float(step), int_to_float(period))
+      let period_f = int_to_float(period)
+      let half = period_f /. 2.0
+      let step_f = int_to_float(step)
+      // pos = step mod period, fully reduced into [0, period)
+      let pos = step_f -. period_f *. float_floor_div(step_f, period_f)
       case pos <=. half {
         True -> pos /. half
         False -> 2.0 -. pos /. half

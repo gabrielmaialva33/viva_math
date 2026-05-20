@@ -111,18 +111,17 @@ pub fn exponential_cdf(e: Exponential, x: Float) -> Float {
   }
 }
 
-/// Inverse-CDF sampling: x = -ln(U) / λ.
+/// Inverse-CDF sampling.
+///
+/// Uses x = -log1p(-U) / λ, which is numerically equivalent to
+/// -ln(1 - U) / λ but avoids cancellation when U is near zero. Since
+/// `random.uniform` returns U ∈ [0, 1), 1 - U ∈ (0, 1] never hits zero.
 pub fn exponential_sample(
   e: Exponential,
   seed: random.Seed,
 ) -> #(Float, random.Seed) {
   let #(u, s) = random.uniform(seed)
-  // Clamp u to avoid log(0).
-  let u_safe = case u >. constants.min_positive {
-    True -> u
-    False -> constants.min_positive
-  }
-  #(0.0 -. scalar.ln(u_safe) /. e.rate, s)
+  #(0.0 -. scalar.log1p(0.0 -. u) /. e.rate, s)
 }
 
 // ============================================================================
@@ -143,16 +142,21 @@ pub fn laplace_pdf(l: Laplace, x: Float) -> Float {
 
 pub fn laplace_sample(l: Laplace, seed: random.Seed) -> #(Float, random.Seed) {
   let #(u, s) = random.uniform(seed)
-  // u in (0, 1); shift to (-0.5, 0.5).
+  // u in [0, 1); shift to [-0.5, 0.5).
   let shifted = u -. 0.5
   let abs_shift = case shifted >=. 0.0 {
     True -> shifted
     False -> 0.0 -. shifted
   }
   let sign_shift = scalar.sign(shifted)
-  let x =
-    l.location -. l.scale *. sign_shift *. scalar.ln(1.0 -. 2.0 *. abs_shift)
-  #(x, s)
+  // log1p(-2|shifted|) is finite for |shifted| < 0.5 (always true since
+  // u ∈ [0, 1)). Guard against the boundary just in case.
+  let inner = 0.0 -. 2.0 *. abs_shift
+  let log_factor = case inner <=. -1.0 {
+    True -> 0.0 -. 1.0e300
+    False -> scalar.log1p(inner)
+  }
+  #(l.location -. l.scale *. sign_shift *. log_factor, s)
 }
 
 // ============================================================================

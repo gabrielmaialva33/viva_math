@@ -278,15 +278,22 @@ pub type MatN {
 }
 
 /// Build a MatN from a row-major list of rows.
+///
+/// Errors if rows is empty, has empty rows, or rows of inconsistent length.
 pub fn matn_from_rows(rows: List(List(Float))) -> Result(MatN, Nil) {
   case rows {
     [] -> Error(Nil)
     [first, ..] -> {
       let n_cols = list.length(first)
-      let consistent = list.all(rows, fn(r) { list.length(r) == n_cols })
-      case consistent {
-        False -> Error(Nil)
-        True -> Ok(MatN(rows: list.length(rows), cols: n_cols, data: rows))
+      case n_cols == 0 {
+        True -> Error(Nil)
+        False -> {
+          let consistent = list.all(rows, fn(r) { list.length(r) == n_cols })
+          case consistent {
+            False -> Error(Nil)
+            True -> Ok(MatN(rows: list.length(rows), cols: n_cols, data: rows))
+          }
+        }
       }
     }
   }
