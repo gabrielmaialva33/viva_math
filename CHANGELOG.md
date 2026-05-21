@@ -7,6 +7,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.100] - 2026-05-20
+
+Scientific computing milestone. The library grew from 7 to 22 modules with
+compensated summation, autodiff (forward and reverse), symplectic
+integrators, FFT, quaternions, complex numbers, t-digest streaming
+quantiles, a binary dense matrix backend, and hierarchical predictive
+coding aligned with 2025-2026 papers.
+
+### Added — High-precision numerics
+
+- **viva_math/precision** — Compensated summation kernel
+  - `neumaier_sum` (default, CPython 3.12-style)
+  - `kahan_sum`, `pairwise_sum`, `fsum` (Shewchuk round-once exact)
+  - `two_sum` exact `(hi, lo)` decomposition
+  - Pébay `Moments` accumulator (M₂/M₃/M₄ online) with `moments_combine`
+    for parallel reductions
+
+### Added — Activations and SOTA 2026 papers
+
+- **viva_math/scalar**
+  - `erf`, `erfc`, `fmod` via `:math` BIFs
+  - GELU exact + tanh approximation; `lambda_gelu` (Cantos & Aragón 2026)
+  - `iglu` + rational `iglu_approx` (Aragón et al. 2026)
+  - `silu`, `swish`, `mish`, `softplus`, `hard_sigmoid`, `selu`
+  - `logsumexp` (Neumaier-backed), `logaddexp` (no NaN at ±∞), `hypot`
+
+### Added — Automatic differentiation
+
+- **viva_math/autodiff** — Forward-mode AD via dual numbers
+  - Scalar `Dual` and 3-D `Dual3` for PAD-space gradients
+  - `grad`, `value_and_grad`, `gradient3`, generic `jacobian`
+- **viva_math/autodiff_reverse** — Reverse-mode AD with computation tape
+  - O(1) gradient cost in input dimension
+  - Public `Tape`, `Op`, `Node` for introspection
+
+### Added — ODE and dynamical systems
+
+- **viva_math/ode**
+  - Dormand-Prince 5(4) (`dop54`) — single-step err ~3·10⁻¹⁰
+  - Symplectic integrators: `velocity_verlet`, `leapfrog`,
+    `position_verlet`, `yoshida4` (order 4)
+  - `integrate_symplectic` trajectory builder
+- **viva_math/scheduler** — Cosine annealing, linear warmup, one-cycle,
+  inverse-sqrt, triangle wave, exponential
+- **viva_math/calculus** — Forward/central/5-point/second-derivative
+  finite differences, gradient, trapezoid/Simpson/Romberg quadrature
+
+### Added — Linear algebra
+
+- **viva_math/matrix**
+  - `mat2_eigenvalues` (characteristic quadratic)
+  - `mat3_symmetric_eigenvalues` (Smith 1961 trigonometric)
+  - `mat3_frobenius`, conditioned `mat3_inverse`
+- **viva_math/matrix_dense** — `DenseMat` with `BitArray` storage
+  (IEEE-754 LE row-major), O(1) random access
+- **viva_math/quaternion** — Unit quaternions: `from_axis_angle`, `mul`,
+  `inverse`, `rotate`, `nlerp`, `slerp`, `to_axis_angle`
+- **viva_math/complex** — Algebra +
+  `exp/log/sqrt/sin/cos/tan/pow_int/pow`, polar form
+- **viva_math/vec2** / **vec4** / **vecn** with `hypot`-based length
+
+### Added — Probability and statistics
+
+- **viva_math/random** — Opaque `Seed`, multiple algorithms, real
+  Fisher-Yates shuffle
+- **viva_math/statistics** — Neumaier-backed sum/mean/covariance/Pearson,
+  Pébay-stable skewness/kurtosis, rolling `moving_average` O(n)
+- **viva_math/distributions** — Gaussian, Uniform, Exponential, Laplace,
+  Cauchy, Bernoulli, Categorical
+- **viva_math/special** — Lanczos gamma/lgamma/digamma/beta/factorial/
+  binomial
+- **viva_math/entropy** — Tsallis, Fisher information, differential
+  entropy for Gaussians, KL with additive smoothing
+- **viva_math/tdigest** — Dunning's t-digest streaming quantiles
+
+### Added — Signal processing
+
+- **viva_math/fft** — Cooley-Tukey radix-2 FFT/IFFT, `pad_to_power_of_two`
+  helper
+
+### Added — Hierarchical active inference (2026 papers)
+
+- **viva_math/free_energy**
+  - `Hierarchical` / `HierarchicalLayer` types (Meta-PCN, ICLR 2026)
+  - `hierarchical_inference_step` + `hierarchical_infer`
+  - `meta_prediction_errors` — PE-of-PE
+  - `bpc_update` / `bpc_precision_update` (Bayesian Predictive Coding)
+  - `ExpectedFreeEnergy`, `select_policy`, `policy_posterior`
+  - Multivariate `gaussian_kl_divergence_full` (d=3 isotropic)
+
+### Added — Tooling and CI
+
+- `.github/workflows/{ci,bench,release}.yml`, `.github/dependabot.yml`
+- `bench/precision_bench.gleam` + `bench/ode_bench.gleam`
+- `examples/{pad_dynamics,active_inference,autodiff_demo}.gleam`
+
+### Added — Testing
+
+- Property-based tests with `qcheck` (random generators + shrinking)
+- Golden-value tests against scipy/Wolfram references
+- 280 internal tests; ecosystem totals 1167 tests passing
+  (viva_math 280 + viva_emotion 55 + viva_telemetry 41 + viva_tensor 791)
+
+### Changed
+
+- `statistics.mean`/`skewness`/`kurtosis`, `entropy.shannon`,
+  `scalar.logsumexp` switched to Neumaier compensated sum
+- `random.shuffle` migrated to classical Fisher-Yates
+- `vec*.length` migrated to progressive `hypot` reduction
+- `matrix.mat3_inverse` rejects ill-conditioned matrices via relative
+  tolerance `ε · ‖M‖_F³`
+- `statistics.moving_average` rolling-sum O(n)
+- `scheduler.triangle` formula corrected
+- `scheduler.cosine_warm_restarts` guards against `period ≤ 0`
+- `random.bernoulli` clamps `p` to `[0, 1]`
+- `random.categorical` rejects negative probabilities
+- `distributions.exponential_sample` uses `-log1p(-u)/λ`
+- `scalar.logaddexp(+∞, +∞)` returns `+∞` (was NaN)
+- `scalar.smoothstep` handles degenerate `edge0 == edge1`
+- `entropy.tsallis` uses fuzzy comparison for `q ≈ 1`
+- `free_energy.gaussian_kl_divergence_full` corrected for d=3 isotropic
+- `viva_math.gleam` `version` constant bumped to `"1.2.100"`
+
+### References
+
+- Hairer, Nørsett, Wanner (1993) "Solving ODEs I"
+- Yoshida (1990) symplectic integrators
+- Dunning & Ertl (2019) t-digest
+- Cantos & Aragón (2026) arXiv:2603.21991 (λ-GELU)
+- Aragón et al. (2026) arXiv:2603.06861 (IGLU)
+- Lin et al. (2026) ICLR submission (Meta-PCN)
+- Vasilescu & Friston (2025) arXiv:2503.24016 (BPC)
+- Pébay (2008, 2016) Sandia higher-order moments
+- Schubert (2018) numerically stable parallel covariance
+
 ## [1.2.0] - 2026-01-24
 
 ### Added
