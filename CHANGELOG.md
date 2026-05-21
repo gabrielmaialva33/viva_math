@@ -172,10 +172,49 @@ bugs above plus two algebraic-property checks proposed by the audit:
 - `vfe_mean_field_iterate_matches_flat_batch_test` — Bishop §2.3.6
   associativity of sequential conjugate updates
 
+### Project organisation (Gleam best-practice alignment)
+
+Codex GPT-5.5 audit cross-checked against `gleam-lang/stdlib`,
+`lustre-labs/lustre`, `gleam-wisp/wisp`, `lpil/gleeunit`,
+`mooreryan/gleam_qcheck` repos.
+
+- **Tests split by module** (mirrors `gleam-lang/stdlib` convention of one
+  `test/<module>_test.gleam` per `src/<package>/<module>.gleam`):
+  - `test/ou_test.gleam` — extracted from the 1287-line mega-file
+  - `test/transport_test.gleam` — extracted
+  - `test/free_energy_variational_test.gleam` — extracted (VFE Bayesian +
+    deep-audit regressions)
+  - `test/viva_math_test.gleam` shrunk from 1287 → 945 lines, now hosts only
+    the legacy per-domain blocks (common/vector/cusp/attractor/entropy/...)
+- **Shared test helpers**: new `test/test_support.gleam` consolidates
+  `is_close/3`, `is_close_vec3/3`, `is_close_complex/3`, `is_close_list/3`
+  and exports `tight` (1e-12) / `loose` (1e-6) tolerance constants. Replaces
+  4 duplicates (`is_close` in `viva_math_test.gleam`, `close` in
+  `qcheck_test.gleam`, `close_complex`/`close_list` in `fft_test.gleam`).
+- **CONTRIBUTING.md fixed**: clone URL was pointing at non-existent
+  `mrootx/viva_math` — corrected to `gabrielmaialva33/viva_math`. Testing
+  section now reflects the per-module file convention.
+- **README.md refreshed**: version badge (1.2.0 → 1.2.102), test count
+  (58 → 333), target field ("Erlang + JavaScript" → "Erlang (BEAM)" — the
+  Erlang FFI in `viva_math_random_ffi.erl` precludes the JS target), and
+  the `gleam_community_maths` reference (dropped in 1.2.101) was scrubbed.
+- **`.github/workflows/release.yml`**: added `gleam format --check` and
+  `gleam test` gates before `gleam publish` (the workflow was publishing
+  unverified artifacts).
+- **`free_energy.gleam` module doc**: removed `Validated by DeepSeek R1
+  671B` line (LLM validation is not a scientific reference); replaced with
+  Beal (2003) and Bishop (2006) which are the actual papers driving the
+  variational block added in 1.2.102.
+
 ### Validated
 
 - 333 tests passing (was 326 → +7; +53 vs 1.2.101).
 - `gleam format --check src test` clean.
+- Test files now: `viva_math_test.gleam` (945L, legacy domain blocks),
+  `ou_test.gleam` (110L), `transport_test.gleam` (67L),
+  `free_energy_variational_test.gleam` (139L), `test_support.gleam` (50L),
+  plus the pre-existing `fft_test`, `precision_test`, `property_test`,
+  `qcheck_test`, `sota_test`.
 
 ## [1.2.101] - 2026-05-21
 
