@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.102] - 2026-05-21
+
+Roadmap entries closed: Ornstein-Uhlenbeck mood dynamics, deeper Bayesian
+variational free energy, Wasserstein distance between affective distributions,
+property-based tests on every closed form.
+
+### Added — `viva_math/ou` (new module)
+
+- `OUParams1D`, `OUParamsVec3` — scalar and componentwise PAD parameters.
+- `step`, `simulate` — exact transition kernel (Doob 1942), no
+  discretisation error regardless of `dt`.
+- `mean_at`, `variance_at`, `stationary_variance`, `stationary_std`,
+  `autocovariance`, `half_life` — analytic moments.
+- Vec3 variants: `step_vec3`, `simulate_vec3`, `mean_at_vec3`,
+  `variance_at_vec3`, `stationary_variance_vec3` (componentwise).
+- `is_valid`, `is_valid_vec3` — physical-meaningfulness predicates.
+
+References: Uhlenbeck & Ornstein (1930); Oravecz, Tuerlinckx & Vandekerckhove
+(2009) *Ornstein-Uhlenbeck Process in Affective Dynamics*; Doob (1942).
+
+`attractor.ou_mean_reversion` remains unchanged (Euler-step deterministic
+version) — no API break downstream.
+
+### Added — `viva_math/transport` (new module)
+
+- `wasserstein_1_empirical`, `wasserstein_2_empirical` — 1D Wasserstein
+  between empirical samples (works for unequal sample sizes via CDF
+  integration).
+- `wasserstein_2_gaussian` — closed form for two Gaussians
+  `√((μ₁−μ₂)² + (σ₁−σ₂)²)`.
+- `wasserstein_pad` — componentwise W₂ over PAD axes.
+
+References: Villani (2008) *Optimal Transport*; Peyré & Cuturi (2019)
+*Computational Optimal Transport*.
+
+### Added — `viva_math/free_energy` (Bayesian deepening)
+
+- `ELBO` type + `elbo` — full Evidence Lower Bound decomposition
+  (reconstruction − KL) for the Gaussian-Gaussian conjugate model.
+- `MeanFieldParams` + `mean_field_update` — closed-form Gaussian posterior
+  under conjugate prior + Gaussian likelihood (Bishop §2.3.3).
+- `mean_field_iterate` — sequential Bayes over observation batches.
+- `laplace_approximation` — Gaussian fit at the MAP via gradient ascent +
+  central-difference Hessian.
+- `log_evidence_gaussian` — closed-form marginal `log p(x)`.
+- `scalar_gaussian_kl` — 1D Gaussian KL (companion to the existing Vec3
+  variants).
+
+References: Beal (2003); Bishop (2006) ch. 10; Friston (2010).
+
+### Added — Property tests
+
+- `test/qcheck_test.gleam` gained properties for the new features
+  (OU mean reversion, ELBO bound, KL non-negativity, Wasserstein symmetry +
+  self-zero) and for previously uncovered closed forms (clamp idempotence,
+  sigmoid range, sin²+cos²=1, softmax sum, JS symmetry, KL self-zero,
+  Shannon non-negativity, erf odd-parity, GELU/SiLU at zero).
+- `test/viva_math_test.gleam` gained unit tests for `ou.*`, the Bayesian
+  block of `free_energy.*`, and `transport.*`.
+
+### Validated
+
+- 322 tests passing (was 280 at 1.2.101) — net +42 tests.
+- `gleam format --check src test` clean.
+
 ## [1.2.101] - 2026-05-21
 
 Self-contained release. The library no longer depends on

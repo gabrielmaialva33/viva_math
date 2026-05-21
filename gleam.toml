@@ -1,5 +1,5 @@
 name = "viva_math"
-version = "1.2.101"
+version = "1.2.102"
 description = "Core mathematical functions for VIVA - sentient digital life. PAD emotions, Cusp catastrophe, Free Energy Principle, attractor dynamics."
 licences = ["MIT"]
 repository = { type = "github", user = "gabrielmaialva33", repo = "viva_math" }
