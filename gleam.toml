@@ -8,9 +8,6 @@ links = [
 ]
 gleam = ">= 1.14.0"
 
-# Targets both Erlang and JavaScript
-target = "erlang"
-
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 
