@@ -85,6 +85,7 @@ pub type Tape {
   Tape(nodes: Dict(NodeId, Node), next_id: Int)
 }
 
+/// Start a new empty computation tape.
 pub fn empty_tape() -> Tape {
   Tape(nodes: dict.new(), next_id: 0)
 }
@@ -110,58 +111,74 @@ pub fn value(tape: Tape, id: NodeId) -> Float {
 
 // ============================================================================
 // Forward operations (record onto tape)
+//
+// Each operation appends a single node, recording the forward value plus the
+// `Op` tag that `backward` will dispatch on for the local derivative.
 // ============================================================================
 
+/// `z = a + b`. Local: `∂z/∂a = 1`, `∂z/∂b = 1`.
 pub fn add(tape: Tape, a: NodeId, b: NodeId) -> #(NodeId, Tape) {
   push(tape, value(tape, a) +. value(tape, b), Add(a, b))
 }
 
+/// `z = a − b`. Local: `∂z/∂a = 1`, `∂z/∂b = −1`.
 pub fn sub(tape: Tape, a: NodeId, b: NodeId) -> #(NodeId, Tape) {
   push(tape, value(tape, a) -. value(tape, b), Sub(a, b))
 }
 
+/// `z = a · b`. Local: `∂z/∂a = b`, `∂z/∂b = a`.
 pub fn mul(tape: Tape, a: NodeId, b: NodeId) -> #(NodeId, Tape) {
   push(tape, value(tape, a) *. value(tape, b), Mul(a, b))
 }
 
+/// `z = a / b`. Local: `∂z/∂a = 1/b`, `∂z/∂b = −a/b²`.
 pub fn div(tape: Tape, a: NodeId, b: NodeId) -> #(NodeId, Tape) {
   push(tape, value(tape, a) /. value(tape, b), Div(a, b))
 }
 
+/// `z = −a`. Local: `∂z/∂a = −1`.
 pub fn neg(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, 0.0 -. value(tape, a), Neg(a))
 }
 
+/// `z = s · a` with `s` a runtime constant. Local: `∂z/∂a = s`.
 pub fn scale(tape: Tape, a: NodeId, s: Float) -> #(NodeId, Tape) {
   push(tape, value(tape, a) *. s, Scale(a, s))
 }
 
+/// `z = exp(a)`. Local: `∂z/∂a = exp(a) = z`.
 pub fn exp(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, exp_f(value(tape, a)), Exp(a))
 }
 
+/// `z = ln(a)`. Local: `∂z/∂a = 1/a`. Caller must ensure `a > 0`.
 pub fn ln(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, ln_f(value(tape, a)), Ln(a))
 }
 
+/// `z = sin(a)`. Local: `∂z/∂a = cos(a)`.
 pub fn sin(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, sin_f(value(tape, a)), Sin(a))
 }
 
+/// `z = cos(a)`. Local: `∂z/∂a = −sin(a)`.
 pub fn cos(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, cos_f(value(tape, a)), Cos(a))
 }
 
+/// `z = tanh(a)`. Local: `∂z/∂a = 1 − tanh²(a) = 1 − z²`.
 pub fn tanh(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   push(tape, tanh_f(value(tape, a)), Tanh(a))
 }
 
+/// `z = σ(a)`. Local: `∂z/∂a = σ(a)·(1 − σ(a)) = z·(1 − z)`.
 pub fn sigmoid(tape: Tape, a: NodeId) -> #(NodeId, Tape) {
   let v = value(tape, a)
   let s = 1.0 /. { 1.0 +. exp_f(0.0 -. v) }
   push(tape, s, Sigmoid(a))
 }
 
+/// `z = aⁿ` (real exponent `n`). Local: `∂z/∂a = n·aⁿ⁻¹`.
 pub fn pow(tape: Tape, a: NodeId, n: Float) -> #(NodeId, Tape) {
   push(tape, pow_f(value(tape, a), n), Pow(a, n))
 }
