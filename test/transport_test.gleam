@@ -80,7 +80,7 @@ pub fn wasserstein_2_multivariate_identity_test() {
   ]
   let assert Ok(distance) =
     transport.wasserstein_2_multivariate(samples, samples, 0.001, 100)
-  should.be_true(is_close(distance, 0.0, loose))
+  should.be_true(is_close(distance, 0.0, tight))
 }
 
 pub fn wasserstein_2_multivariate_single_point_translation_test() {
@@ -127,4 +127,22 @@ pub fn wasserstein_2_multivariate_matches_pad_for_translation_test() {
     transport.wasserstein_2_multivariate(p, q, 0.01, 150)
   let assert Ok(pad) = transport.wasserstein_pad(p, q)
   should.be_true(is_close_hybrid(multivariate, pad, loose, loose))
+}
+
+pub fn wasserstein_2_multivariate_high_max_iter_stable_test() {
+  let p = [
+    vector.pad(0.0, 0.1, 0.2),
+    vector.pad(0.4, 0.5, 0.6),
+    vector.pad(0.8, 0.9, 1.0),
+  ]
+  let q = [
+    vector.pad(0.2, 0.0, 0.1),
+    vector.pad(0.6, 0.4, 0.5),
+    vector.pad(1.0, 0.8, 0.9),
+  ]
+  let assert Ok(reference) =
+    transport.wasserstein_2_multivariate(p, q, 0.05, 200)
+  let assert Ok(long_run) =
+    transport.wasserstein_2_multivariate(p, q, 0.05, 10_000)
+  should.be_true(is_close_hybrid(long_run, reference, 1.0e-9, 1.0e-9))
 }

@@ -174,7 +174,9 @@ pub fn wasserstein_pad(
 ///
 /// - `xs`, `ys`: empirical PAD samples with uniform weights.
 /// - `epsilon`: regularization strength, typically `0.01` to `1.0`.
-/// - `max_iter`: Sinkhorn iterations, typically `100` to `1000`.
+/// - `max_iter`: upper bound on Sinkhorn iterations, typically `100` to
+///   `1000`; convergence may stop earlier once marginal violation is below
+///   the internal tolerance.
 /// - Returns `Error(Nil)` if either list is empty.
 pub fn wasserstein_2_multivariate(
   xs: List(vector.Vec3),
@@ -191,11 +193,10 @@ pub fn wasserstein_2_multivariate(
       let a = 1.0 /. n
       let b = 1.0 /. m
       let costs = cost_matrix(xs, ys)
-      let kernel = sinkhorn_kernel(costs, float.max(epsilon, 1.0e-12))
-      let u0 = fill(list.length(xs), a, [])
-      let v0 = fill(list.length(ys), b, [])
-      let #(u, v) = sinkhorn_iter(kernel, max_iter, a, b, u0, v0)
-      let cost = transport_cost(costs, kernel, u, v)
+      let epsilon_safe = float.max(epsilon, 1.0e-12)
+      let #(alpha, beta) =
+        sinkhorn_log_domain(costs, epsilon_safe, max_iter, a, b, 1.0e-9)
+      let cost = transport_cost_log(costs, alpha, beta, epsilon_safe)
       Ok(scalar.sqrt(float.max(cost, 0.0)))
     }
   }
@@ -212,81 +213,152 @@ fn cost_matrix(
   list.map(xs, fn(x) { list.map(ys, fn(y) { vector.distance_squared(x, y) }) })
 }
 
-fn sinkhorn_kernel(
+fn sinkhorn_log_domain(
   costs: List(List(Float)),
   epsilon: Float,
-) -> List(List(Float)) {
-  list.map(costs, fn(row) {
-    list.map(row, fn(cost) { scalar.exp(0.0 -. cost /. epsilon) })
-  })
+  max_iter: Int,
+  a: Float,
+  b: Float,
+  tol: Float,
+) -> #(List(Float), List(Float)) {
+  let alpha0 = fill(list.length(costs), 0.0, [])
+  let beta0 = case costs {
+    [] -> []
+    [first, ..] -> fill(list.length(first), 0.0, [])
+  }
+  sinkhorn_log_iter(
+    costs,
+    epsilon,
+    max_iter,
+    a,
+    b,
+    scalar.ln(a),
+    scalar.ln(b),
+    tol,
+    alpha0,
+    beta0,
+  )
 }
 
-fn sinkhorn_iter(
-  kernel: List(List(Float)),
+fn sinkhorn_log_iter(
+  costs: List(List(Float)),
+  epsilon: Float,
   remaining: Int,
   a: Float,
   b: Float,
-  u: List(Float),
-  v: List(Float),
+  log_a: Float,
+  log_b: Float,
+  tol: Float,
+  alpha: List(Float),
+  beta: List(Float),
 ) -> #(List(Float), List(Float)) {
   case remaining <= 0 {
-    True -> #(u, v)
+    True -> #(alpha, beta)
     False -> {
-      let next_u = scale_inverse_rows(kernel, v, a)
-      let next_v = scale_inverse_columns(kernel, next_u, b)
-      sinkhorn_iter(kernel, remaining - 1, a, b, next_u, next_v)
+      let next_alpha = update_alpha(costs, beta, epsilon, log_a, [])
+      let next_beta = update_beta(costs, next_alpha, epsilon, log_b)
+      case
+        marginal_violation(costs, next_alpha, next_beta, epsilon, a, b) <=. tol
+      {
+        True -> #(next_alpha, next_beta)
+        False ->
+          sinkhorn_log_iter(
+            costs,
+            epsilon,
+            remaining - 1,
+            a,
+            b,
+            log_a,
+            log_b,
+            tol,
+            next_alpha,
+            next_beta,
+          )
+      }
     }
   }
 }
 
-fn scale_inverse_rows(
-  kernel: List(List(Float)),
-  v: List(Float),
-  mass: Float,
+fn update_alpha(
+  costs: List(List(Float)),
+  beta: List(Float),
+  epsilon: Float,
+  log_a: Float,
+  acc: List(Float),
 ) -> List(Float) {
-  list.map(kernel, fn(row) { safe_ratio(mass, dot_lists(row, v, 0.0)) })
-}
-
-fn scale_inverse_columns(
-  kernel: List(List(Float)),
-  u: List(Float),
-  mass: Float,
-) -> List(Float) {
-  case kernel {
-    [] -> []
-    [first, ..] -> scale_inverse_columns_walk(first, kernel, u, mass, [])
+  case costs {
+    [] -> list.reverse(acc)
+    [row, ..rest] -> {
+      let alpha_i =
+        epsilon *. log_a -. epsilon *. logsumexp_row(row, beta, epsilon, [])
+      update_alpha(rest, beta, epsilon, log_a, [alpha_i, ..acc])
+    }
   }
 }
 
-fn scale_inverse_columns_walk(
+fn update_beta(
+  costs: List(List(Float)),
+  alpha: List(Float),
+  epsilon: Float,
+  log_b: Float,
+) -> List(Float) {
+  case costs {
+    [] -> []
+    [first, ..] -> update_beta_columns(first, costs, alpha, epsilon, log_b, [])
+  }
+}
+
+fn update_beta_columns(
   first_row: List(Float),
-  kernel: List(List(Float)),
-  u: List(Float),
-  mass: Float,
+  costs: List(List(Float)),
+  alpha: List(Float),
+  epsilon: Float,
+  log_b: Float,
   acc: List(Float),
 ) -> List(Float) {
   case first_row {
     [] -> list.reverse(acc)
     [_, ..rest] -> {
-      let column_sum = weighted_column_head(kernel, u, 0.0)
-      let tails = drop_column_head(kernel, [])
-      scale_inverse_columns_walk(rest, tails, u, mass, [
-        safe_ratio(mass, column_sum),
-        ..acc
-      ])
+      let beta_j =
+        epsilon
+        *. log_b
+        -. epsilon
+        *. logsumexp_column_head(costs, alpha, epsilon, [])
+      let tails = drop_column_head(costs, [])
+      update_beta_columns(rest, tails, alpha, epsilon, log_b, [beta_j, ..acc])
     }
   }
 }
 
-fn weighted_column_head(
-  rows: List(List(Float)),
-  weights: List(Float),
-  acc: Float,
+fn logsumexp_row(
+  costs: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+  acc: List(Float),
 ) -> Float {
-  case rows, weights {
-    [[x, ..], ..rest_rows], [w, ..rest_weights] ->
-      weighted_column_head(rest_rows, rest_weights, acc +. w *. x)
-    _, _ -> acc
+  case costs, beta {
+    [cost, ..cost_tail], [beta_j, ..beta_tail] ->
+      logsumexp_row(cost_tail, beta_tail, epsilon, [
+        { 0.0 -. cost +. beta_j } /. epsilon,
+        ..acc
+      ])
+    _, _ -> scalar.logsumexp(list.reverse(acc))
+  }
+}
+
+fn logsumexp_column_head(
+  rows: List(List(Float)),
+  alpha: List(Float),
+  epsilon: Float,
+  acc: List(Float),
+) -> Float {
+  case rows, alpha {
+    [[cost, ..], ..rest_rows], [alpha_i, ..rest_alpha] ->
+      logsumexp_column_head(rest_rows, rest_alpha, epsilon, [
+        { 0.0 -. cost +. alpha_i } /. epsilon,
+        ..acc
+      ])
+    _, _ -> scalar.logsumexp(list.reverse(acc))
   }
 }
 
@@ -301,51 +373,167 @@ fn drop_column_head(
   }
 }
 
-fn transport_cost(
+fn marginal_violation(
   costs: List(List(Float)),
-  kernel: List(List(Float)),
-  u: List(Float),
-  v: List(Float),
+  alpha: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+  a: Float,
+  b: Float,
 ) -> Float {
-  case costs, kernel, u {
-    [cost_row, ..cost_tail], [kernel_row, ..kernel_tail], [u_i, ..u_tail] ->
-      transport_cost_row(cost_row, kernel_row, u_i, v, 0.0)
-      +. transport_cost(cost_tail, kernel_tail, u_tail, v)
-    _, _, _ -> 0.0
-  }
+  float.max(
+    max_row_marginal_violation(costs, alpha, beta, epsilon, a, 0.0),
+    max_column_marginal_violation(costs, alpha, beta, epsilon, b),
+  )
 }
 
-fn transport_cost_row(
-  costs: List(Float),
-  kernel: List(Float),
-  u_i: Float,
-  v: List(Float),
+fn max_row_marginal_violation(
+  costs: List(List(Float)),
+  alpha: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+  mass: Float,
   acc: Float,
 ) -> Float {
-  case costs, kernel, v {
-    [cost, ..cost_tail], [k, ..kernel_tail], [v_j, ..v_tail] ->
-      transport_cost_row(
-        cost_tail,
-        kernel_tail,
-        u_i,
-        v_tail,
-        acc +. u_i *. k *. v_j *. cost,
+  case costs, alpha {
+    [row, ..rest], [alpha_i, ..alpha_tail] -> {
+      let row_sum = plan_row_sum(row, alpha_i, beta, epsilon, 0.0)
+      max_row_marginal_violation(
+        rest,
+        alpha_tail,
+        beta,
+        epsilon,
+        mass,
+        float.max(acc, float.absolute_value(row_sum -. mass)),
       )
-    _, _, _ -> acc
-  }
-}
-
-fn dot_lists(a: List(Float), b: List(Float), acc: Float) -> Float {
-  case a, b {
-    [x, ..xs], [y, ..ys] -> dot_lists(xs, ys, acc +. x *. y)
+    }
     _, _ -> acc
   }
 }
 
-fn safe_ratio(numerator: Float, denominator: Float) -> Float {
-  case denominator <=. 0.0 {
-    True -> 0.0
-    False -> numerator /. denominator
+fn max_column_marginal_violation(
+  costs: List(List(Float)),
+  alpha: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+  mass: Float,
+) -> Float {
+  case costs {
+    [] -> 0.0
+    [first, ..] ->
+      max_column_marginal_violation_walk(
+        first,
+        costs,
+        alpha,
+        beta,
+        epsilon,
+        mass,
+        0.0,
+      )
+  }
+}
+
+fn max_column_marginal_violation_walk(
+  first_row: List(Float),
+  costs: List(List(Float)),
+  alpha: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+  mass: Float,
+  acc: Float,
+) -> Float {
+  case first_row, beta {
+    [], _ -> acc
+    [_, ..rest], [beta_j, ..beta_tail] -> {
+      let column_sum = plan_column_head_sum(costs, alpha, beta_j, epsilon, 0.0)
+      let tails = drop_column_head(costs, [])
+      max_column_marginal_violation_walk(
+        rest,
+        tails,
+        alpha,
+        beta_tail,
+        epsilon,
+        mass,
+        float.max(acc, float.absolute_value(column_sum -. mass)),
+      )
+    }
+    _, _ -> acc
+  }
+}
+
+fn plan_row_sum(
+  costs: List(Float),
+  alpha_i: Float,
+  beta: List(Float),
+  epsilon: Float,
+  acc: Float,
+) -> Float {
+  case costs, beta {
+    [cost, ..cost_tail], [beta_j, ..beta_tail] ->
+      plan_row_sum(
+        cost_tail,
+        alpha_i,
+        beta_tail,
+        epsilon,
+        acc +. scalar.exp({ alpha_i +. beta_j -. cost } /. epsilon),
+      )
+    _, _ -> acc
+  }
+}
+
+fn plan_column_head_sum(
+  rows: List(List(Float)),
+  alpha: List(Float),
+  beta_j: Float,
+  epsilon: Float,
+  acc: Float,
+) -> Float {
+  case rows, alpha {
+    [[cost, ..], ..rest_rows], [alpha_i, ..rest_alpha] ->
+      plan_column_head_sum(
+        rest_rows,
+        rest_alpha,
+        beta_j,
+        epsilon,
+        acc +. scalar.exp({ alpha_i +. beta_j -. cost } /. epsilon),
+      )
+    _, _ -> acc
+  }
+}
+
+fn transport_cost_log(
+  costs: List(List(Float)),
+  alpha: List(Float),
+  beta: List(Float),
+  epsilon: Float,
+) -> Float {
+  case costs, alpha {
+    [cost_row, ..cost_tail], [alpha_i, ..alpha_tail] ->
+      transport_cost_log_row(cost_row, alpha_i, beta, epsilon, 0.0)
+      +. transport_cost_log(cost_tail, alpha_tail, beta, epsilon)
+    _, _ -> 0.0
+  }
+}
+
+fn transport_cost_log_row(
+  costs: List(Float),
+  alpha_i: Float,
+  beta: List(Float),
+  epsilon: Float,
+  acc: Float,
+) -> Float {
+  case costs, beta {
+    [cost, ..cost_tail], [beta_j, ..beta_tail] -> {
+      let plan_mass = scalar.exp({ alpha_i +. beta_j -. cost } /. epsilon)
+      transport_cost_log_row(
+        cost_tail,
+        alpha_i,
+        beta_tail,
+        epsilon,
+        acc +. plan_mass *. cost,
+      )
+    }
+    _, _ -> acc
   }
 }
 
@@ -503,4 +691,5 @@ fn sort_samples(samples: List(Float)) -> List(Float) {
 }
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float
