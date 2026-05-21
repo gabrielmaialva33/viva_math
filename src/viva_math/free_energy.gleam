@@ -775,22 +775,11 @@ pub fn bpc_precision_update(
   }
 }
 
-// Helper: convert int to float
-fn int_to_float(n: Int) -> Float {
-  case n {
-    0 -> 0.0
-    1 -> 1.0
-    2 -> 2.0
-    3 -> 3.0
-    4 -> 4.0
-    5 -> 5.0
-    _ -> {
-      let half = n / 2
-      let remainder = n - half * 2
-      int_to_float(half) *. 2.0 +. int_to_float(remainder)
-    }
-  }
-}
+// O(1) FFI conversion via Erlang's BIF — replaces the prior recursive Gleam
+// implementation (which was O(log n) and arguably allocated more than needed
+// on hot paths).
+@external(erlang, "erlang", "float")
+fn int_to_float(n: Int) -> Float
 
 // ============================================================================
 // Variational Inference — Bayesian deepening of the FEP
@@ -913,8 +902,9 @@ pub fn mean_field_update(
   case prior_var >. 0.0 && likelihood_var >. 0.0 {
     False -> Error(Nil)
     True -> {
-      let n = int_to_float(list.length(observations))
-      let sum_x = list.fold(observations, 0.0, fn(acc, x) { acc +. x })
+      // Single pass: count + sum together (was list.length + list.fold).
+      let #(count, sum_x) = count_and_sum(observations, 0, 0.0)
+      let n = int_to_float(count)
       let prior_prec = 1.0 /. prior_var
       let lik_prec = 1.0 /. likelihood_var
       let post_prec = prior_prec +. n *. lik_prec
@@ -923,6 +913,13 @@ pub fn mean_field_update(
         post_var *. { prior_prec *. prior_mean +. lik_prec *. sum_x }
       Ok(MeanFieldParams(q_mean: post_mean, q_var: post_var))
     }
+  }
+}
+
+fn count_and_sum(xs: List(Float), count: Int, sum: Float) -> #(Int, Float) {
+  case xs {
+    [] -> #(count, sum)
+    [x, ..rest] -> count_and_sum(rest, count + 1, sum +. x)
   }
 }
 
