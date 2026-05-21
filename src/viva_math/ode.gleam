@@ -355,6 +355,112 @@ pub fn rkf45(f: Drift, t: Float, x: Float, dt: Float) -> #(Float, Float) {
 }
 
 // ============================================================================
+// Symplectic integrators — Hamiltonian / energy-preserving systems
+// ============================================================================
+//
+// For systems `dq/dt = ∂H/∂p`, `dp/dt = -∂H/∂q` (Hamilton's equations)
+// symplectic integrators preserve a discrete approximation of energy over
+// arbitrarily long time spans, unlike RK methods whose energy drifts
+// linearly. Useful for MD, orbital mechanics, HMC, and any long-time
+// integration where energy conservation matters more than local accuracy.
+
+/// Force law `F(q)`: acceleration as a function of position (unit mass).
+pub type ForceLaw =
+  fn(Float) -> Float
+
+/// Velocity Verlet — order 2, symplectic, time-reversible.
+pub fn velocity_verlet(
+  force: ForceLaw,
+  q: Float,
+  v: Float,
+  dt: Float,
+) -> #(Float, Float) {
+  let a = force(q)
+  let q_new = q +. v *. dt +. 0.5 *. a *. dt *. dt
+  let a_new = force(q_new)
+  let v_new = v +. 0.5 *. { a +. a_new } *. dt
+  #(q_new, v_new)
+}
+
+/// Leapfrog (kick-drift-kick) — order 2, symplectic.
+pub fn leapfrog(
+  force: ForceLaw,
+  q: Float,
+  v: Float,
+  dt: Float,
+) -> #(Float, Float) {
+  let v_half = v +. 0.5 *. force(q) *. dt
+  let q_new = q +. v_half *. dt
+  let v_new = v_half +. 0.5 *. force(q_new) *. dt
+  #(q_new, v_new)
+}
+
+/// Position Verlet — `q(t+dt) = 2·q(t) - q(t-dt) + a(q(t))·dt²`.
+pub fn position_verlet(
+  force: ForceLaw,
+  q_prev: Float,
+  q: Float,
+  dt: Float,
+) -> Float {
+  2.0 *. q -. q_prev +. force(q) *. dt *. dt
+}
+
+/// Yoshida 4th-order symplectic integrator.
+///
+/// Composes three leapfrog steps with Yoshida (1990) coefficients. Order 4
+/// global error, ~3× the cost of leapfrog per step but allows ~10× larger
+/// `dt` for the same accuracy.
+pub fn yoshida4(
+  force: ForceLaw,
+  q: Float,
+  v: Float,
+  dt: Float,
+) -> #(Float, Float) {
+  let cbrt_2 = 1.259_921_049_894_873_2
+  let w1 = 1.0 /. { 2.0 -. cbrt_2 }
+  let w0 = 0.0 -. cbrt_2 *. w1
+  let #(q1, v1) = leapfrog(force, q, v, w1 *. dt)
+  let #(q2, v2) = leapfrog(force, q1, v1, w0 *. dt)
+  leapfrog(force, q2, v2, w1 *. dt)
+}
+
+/// Integrate a Hamiltonian system with a symplectic method.
+pub fn integrate_symplectic(
+  method: fn(ForceLaw, Float, Float, Float) -> #(Float, Float),
+  force: ForceLaw,
+  t0: Float,
+  q0: Float,
+  v0: Float,
+  dt: Float,
+  steps: Int,
+) -> List(#(Float, Float, Float)) {
+  symplectic_loop(method, force, t0, q0, v0, dt, steps, [#(t0, q0, v0)])
+}
+
+fn symplectic_loop(
+  method: fn(ForceLaw, Float, Float, Float) -> #(Float, Float),
+  force: ForceLaw,
+  t: Float,
+  q: Float,
+  v: Float,
+  dt: Float,
+  steps: Int,
+  acc: List(#(Float, Float, Float)),
+) -> List(#(Float, Float, Float)) {
+  case steps <= 0 {
+    True -> list.reverse(acc)
+    False -> {
+      let #(q_new, v_new) = method(force, q, v, dt)
+      let t_new = t +. dt
+      symplectic_loop(method, force, t_new, q_new, v_new, dt, steps - 1, [
+        #(t_new, q_new, v_new),
+        ..acc
+      ])
+    }
+  }
+}
+
+// ============================================================================
 // Trajectory builders
 // ============================================================================
 
