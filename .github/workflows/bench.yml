@@ -28,10 +28,10 @@ jobs:
         run: gleam deps download
 
       - name: Run precision benchmark
-        run: gleam run -m bench_precision > precision_results.txt
+        run: gleam run -m viva_math/bench_precision > precision_results.txt
 
       - name: Run ODE benchmark
-        run: gleam run -m bench_ode > ode_results.txt
+        run: gleam run -m viva_math/bench_ode > ode_results.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
