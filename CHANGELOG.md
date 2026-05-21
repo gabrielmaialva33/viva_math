@@ -122,9 +122,59 @@ opportunities were in the implementation, not the math.
   Erlang's `erlang:float/1` BIF (O(1)). Used everywhere `count` is
   converted in the Bayesian path.
 
+### Fixed (deep audit — Codex GPT-5.5 high reasoning)
+
+Third audit pass surfaced **3 bugs** + 2 inconsistencies that the formal-math
+and performance reviews had missed:
+
+- **`free_energy.elbo` — Jensen bound violation with `q_var ≤ 0`** (BUG):
+  the reconstruction term silently inflated by adding negative `q_var` while
+  the KL was floored at `0.0`, producing an "ELBO" greater than `log p(x)`.
+  Counterexample: `elbo(0.0, 0.0, -10.0, 0.0, 1.0, 1.0).total ≈ 4.081` vs
+  `log_evidence_gaussian(0.0, 0.0, 1.0, 1.0) ≈ -1.266`. **Fixed**: guard
+  rejects any non-positive variance upfront, returning the large-penalty
+  sentinel triple.
+- **`free_energy.log_evidence_gaussian` — invalid variance compensation**
+  (BUG): `prior_var = 2.0, likelihood_var = -1.0` produced a finite (but
+  meaningless) log-density because the sum `marginal_var = 1.0` was the only
+  thing checked. **Fixed**: both components must be `> 0`.
+- **`free_energy.laplace_approximation` — infinite variance on flat
+  posterior** (BUG): `second < 0.0` accepted curvatures as small as
+  `-1.0e-300`, yielding `q_var = +∞`. **Fixed**: requires
+  `second < -1.0e-12` (sized to the `O(h²)` finite-difference roundoff
+  floor at `h = 1.0e-4`).
+- **`transport.wasserstein_2_gaussian` — negative `stddev`**
+  (INCONSISTENCY): `Gaussian(0, -1)` vs `Gaussian(0, 1)` gave `W_2 = 2.0`
+  even though `N(μ, σ²)` only depends on `σ²`. **Fixed**: `|σ₁|` and `|σ₂|`
+  before subtracting; doc rationale.
+- **`ou.step` / `ou.simulate` accept `dt < 0`** (INCONSISTENCY): negative
+  `dt` makes `var_term` go negative, `std_term` silently collapses to `0.0`,
+  and a normal draw is consumed but unused. **Mitigated**: documented as
+  caller-validated input pointing at `is_valid`; no API break.
+- **`transport.walk_quantile` `squared: Bool` branch** (SMELL): the BEAM
+  doesn't specialise the loop on the literal `True`/`False` callers pass.
+  **Fixed**: split into `walk_quantile_squared` (for W₂²) and
+  `walk_quantile_abs` (for W₁) — no branch inside the hot loop.
+
+### Added — Deep-audit regression tests
+
+`test/viva_math_test.gleam` gained 7 regression tests covering each of the
+bugs above plus two algebraic-property checks proposed by the audit:
+
+- `vfe_elbo_negative_q_var_does_not_break_bound_test` — Jensen bound
+- `vfe_log_evidence_rejects_componentwise_invalid_variance_test`
+- `vfe_laplace_rejects_flat_log_posterior_test`
+- `wasserstein_2_gaussian_negative_stddev_test`
+- `ou_mean_at_composes_over_time_test` — semigroup property
+  `mean_at(t₁+t₂) = mean_at(t₂, mean_at(t₁))`
+- `wasserstein_2_triangle_unequal_sizes_test` — triangle inequality on
+  unequal-size empirical samples
+- `vfe_mean_field_iterate_matches_flat_batch_test` — Bishop §2.3.6
+  associativity of sequential conjugate updates
+
 ### Validated
 
-- 326 tests passing (was 280 at 1.2.101) — net +46 tests.
+- 333 tests passing (was 326 → +7; +53 vs 1.2.101).
 - `gleam format --check src test` clean.
 
 ## [1.2.101] - 2026-05-21
