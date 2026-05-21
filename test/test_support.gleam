@@ -78,3 +78,18 @@ pub fn is_close_hybrid(
 ) -> Bool {
   is_close(a, b, abs_tol) || is_close_rel(a, b, rel_tol)
 }
+
+/// Distance in ULPs (Units in the Last Place) between two IEEE-754 doubles.
+/// Returns the absolute integer distance.
+///
+/// The FFI maps the float bit pattern onto a monotonic signed integer line,
+/// following CPython's convention where `0.0` maps to `0` and `-0.0` maps to
+/// `-1`.
+@external(erlang, "test_support_ffi", "ulp_distance")
+@external(javascript, "./test_support_ffi.mjs", "ulp_distance")
+pub fn ulp_distance(a: Float, b: Float) -> Int
+
+/// `|a − b| ≤ max_ulps` in ULP space.
+pub fn is_close_ulp(a: Float, b: Float, max_ulps: Int) -> Bool {
+  ulp_distance(a, b) <= max_ulps
+}
