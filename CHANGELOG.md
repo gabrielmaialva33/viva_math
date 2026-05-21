@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.103] - 2026-05-21
+
+Compatibility-pack release. Adds the handful of APIs that downstream
+packages (`viva_glyph`, `viva_tensor`) still pull from
+`gleam_community_maths`, so they can complete the migration started in
+`viva_math 1.2.101`.
+
+A pre-tag Codex GPT-5.5 review flagged a real bug (`lp_norm(v, 0.0)`
+crashed on Erlang with `badarith` while returning `Infinity` on JavaScript)
+and the absence of direct local tests for the new APIs. Both were
+addressed before publishing.
+
+### Added — `viva_math/vecn`
+
+- `euclidean_distance(a, b)` — alias for `distance/2`. Symmetry with
+  `gleam_community_maths` API.
+- `manhattan_distance(a, b)` — `Σ |aᵢ − bᵢ|`.
+- `cosine_similarity(a, b)` — `(a · b) / (‖a‖ · ‖b‖)`. `Error(Nil)` when
+  either vector has zero norm or lengths differ.
+- `lp_norm(v, p) -> Result(Float, Nil)` — general Lₚ norm. `p = 1.0` ≡
+  Manhattan, `p = 2.0` ≡ `length` (Euclidean). **Returns `Error(Nil)` for
+  `p ≤ 0`** — that domain would diverge across targets (`badarith` on
+  Erlang vs `Infinity` on JavaScript), which is unacceptable for a
+  dual-target library. `0 < p < 1` is allowed but produces a
+  pseudo-norm (triangle inequality fails); doc says so.
+
+### Added — `viva_math/statistics`
+
+- `linear_space(start, stop, steps, endpoint)` — NumPy `linspace`.
+- `logarithmic_space(start, stop, steps, endpoint, base)` — NumPy
+  `logspace`, parameterised by `base`.
+- `cumulative_sum(xs)` — running `Σ`. Note: naive left-to-right
+  summation (mirrors NumPy `cumsum`). For compensated summation, fold
+  through `precision.neumaier_sum` instead.
+- `cumulative_product(xs)` — running `Π`.
+
+### Added — `viva_math/precision`
+
+- `is_close(a, b, rtol, atol)` — `|a − b| ≤ atol + rtol · |b|`. NumPy
+  `isclose` semantics (asymmetric in `b` by design).
+- `all_close(pairs, rtol, atol)` — `True` iff every paired sample is
+  `is_close`. Vacuous `True` for empty input, matching NumPy.
+
+### Added — `test/compat_pack_test.gleam`
+
+31 direct unit tests covering all 10 new functions:
+
+- `vecn.euclidean_distance`: Pythagorean triple `(3,4) → 5`, self-zero,
+  size mismatch rejection.
+- `vecn.manhattan_distance`: tabulated + size mismatch.
+- `vecn.cosine_similarity`: self-one, orthogonal-zero, **all three
+  zero-vector paths return `Error(Nil)`** (both, left-only, right-only).
+- `vecn.lp_norm`: L₁/L₂/L₃ tabulated, empty vector, **p=0 and p<0 both
+  return `Error(Nil)`** (cross-target safety).
+- `statistics.linear_space`: endpoint True/False, singleton, empty,
+  `start == stop` degenerate.
+- `statistics.logarithmic_space`: powers of 10 (`[1, 10, 100, 1000]`).
+- `statistics.cumulative_{sum,product}`: tabulated + empty.
+- `precision.is_close`: within rtol, within atol, neither, exact
+  bit-equality at the next IEEE-754 double after 1.0.
+- `precision.all_close`: empty (vacuous True), homogeneous pass, one
+  fails.
+
+### Fixed (pre-tag review)
+
+- **`vecn.lp_norm` cross-target divergence**: changed signature from
+  `Float` to `Result(Float, Nil)` and added an explicit `p ≤ 0` guard.
+  Previously `lp_norm(v, 0.0)` would raise `badarith` on Erlang and
+  return `Infinity` on JavaScript — a silent dual-target inconsistency.
+
+### Validated
+
+- **553 tests passing on both Erlang and JavaScript targets** (+31 new
+  direct unit tests for the compat pack). The "no direct coverage" gap
+  flagged by the pre-tag review is closed.
+- `gleam format --check src test` clean.
+
 ## [1.2.102] - 2026-05-21
 
 Roadmap entries closed: Ornstein-Uhlenbeck mood dynamics, deeper Bayesian
@@ -998,7 +1075,9 @@ coding aligned with 2025-2026 papers.
 - Oravecz et al. (2009) "O-U Process in Affective Dynamics"
 - Shannon (1948) "A Mathematical Theory of Communication"
 
-[Unreleased]: https://github.com/gabrielmaialva33/viva_math/compare/v1.2.101...HEAD
+[Unreleased]: https://github.com/gabrielmaialva33/viva_math/compare/v1.2.103...HEAD
+[1.2.103]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.103
+[1.2.102]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.102
 [1.2.101]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.101
 [1.2.100]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.100
 [1.2.0]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.0
