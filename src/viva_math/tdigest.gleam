@@ -32,7 +32,10 @@ import gleam/order
 import viva_math/scalar
 
 /// A centroid: a weighted point on the real line.
-pub type Centroid {
+/// A weighted centroid `(mean, weight)` representing a cluster of nearby
+/// samples in the digest. Opaque — invariants (sorted by `mean`, positive
+/// `weight`) are maintained by `insert` / `merge` / `compress`.
+pub opaque type Centroid {
   Centroid(mean: Float, weight: Float)
 }
 
@@ -40,8 +43,31 @@ pub type Centroid {
 ///
 /// `compression` controls memory/accuracy tradeoff (typical 100). Larger →
 /// more accurate, more memory.
-pub type TDigest {
+///
+/// Opaque — direct construction could violate the sorted-centroids
+/// invariant or the consistency between `centroids` and `total_weight`.
+/// Use `new` / `with_compression` / `insert` to build.
+pub opaque type TDigest {
   TDigest(compression: Float, centroids: List(Centroid), total_weight: Float)
+}
+
+// ============================================================================
+// Accessors
+// ============================================================================
+
+/// Compression parameter δ (typical 100; larger → more accurate / more memory).
+pub fn compression(td: TDigest) -> Float {
+  td.compression
+}
+
+/// Mean of a centroid.
+pub fn centroid_mean(c: Centroid) -> Float {
+  c.mean
+}
+
+/// Weight of a centroid.
+pub fn centroid_weight(c: Centroid) -> Float {
+  c.weight
 }
 
 // ============================================================================

@@ -20,7 +20,7 @@ pub fn td_new_is_empty_test() {
 
 pub fn td_with_compression_test() {
   let d = td.with_compression(50.0)
-  is_close(d.compression, 50.0, 1.0e-12) |> should.be_true
+  is_close(td.compression(d), 50.0, 1.0e-12) |> should.be_true
 }
 
 // ============================================================================
