@@ -40,7 +40,7 @@ pub fn wasserstein_1_empirical(
         True ->
           Ok(walk_pair_abs(p_sorted, q_sorted, 0.0) /. int_to_float(p_len))
         False ->
-          Ok(walk_quantile(
+          Ok(walk_quantile_abs(
             p_sorted,
             q_sorted,
             int_to_float(p_len),
@@ -49,7 +49,6 @@ pub fn wasserstein_1_empirical(
             0,
             0.0,
             0.0,
-            False,
           ))
       }
     }
@@ -90,7 +89,7 @@ pub fn wasserstein_2_empirical(
           ))
         False ->
           Ok(
-            scalar.sqrt(walk_quantile(
+            scalar.sqrt(walk_quantile_squared(
               p_sorted,
               q_sorted,
               int_to_float(p_len),
@@ -99,7 +98,6 @@ pub fn wasserstein_2_empirical(
               0,
               0.0,
               0.0,
-              True,
             )),
           )
       }
@@ -110,12 +108,18 @@ pub fn wasserstein_2_empirical(
 /// Closed form W_2 for scalar Gaussians.
 ///
 /// `W_2(N(μ₁, σ₁²), N(μ₂, σ₂²)) = √((μ₁ − μ₂)² + (σ₁ − σ₂)²)`.
+///
+/// `stddev` is normalised via `abs` before subtracting — a negative `stddev`
+/// has no Gaussian meaning (`N(μ, σ²)` depends only on `σ²`), and silently
+/// using the signed value would yield `W_2(N(0, 1), N(0, 1))` of `2.0` for
+/// `Gaussian(0, -1) vs Gaussian(0, 1)`, which is wrong.
 pub fn wasserstein_2_gaussian(
   g1: distributions.Gaussian,
   g2: distributions.Gaussian,
 ) -> Float {
   let mean_delta = g1.mean -. g2.mean
-  let stddev_delta = g1.stddev -. g2.stddev
+  let stddev_delta =
+    float.absolute_value(g1.stddev) -. float.absolute_value(g2.stddev)
   scalar.sqrt(mean_delta *. mean_delta +. stddev_delta *. stddev_delta)
 }
 
@@ -183,12 +187,10 @@ fn walk_pair_abs(p: List(Float), q: List(Float), acc: Float) -> Float {
   }
 }
 
-/// O(n+m) quantile-integral walk over the breakpoint union `{(i+1)/n} ∪
-/// `{(j+1)/m}`. `squared=True` gives the W_2² integrand; otherwise W_1.
-///
-/// Both lists are consumed by their heads — never indexed by position — so
-/// each step is O(1) and the total is O(n+m).
-fn walk_quantile(
+/// O(n+m) quantile-integral walk for W_2² over `{(i+1)/n} ∪ {(j+1)/m}`.
+/// Slab contribution `(p_i − q_j)² · Δu`. Specialised to avoid a `Bool`
+/// branch in the hot loop (BEAM doesn't specialise on literal `True`/`False`).
+fn walk_quantile_squared(
   p_sorted: List(Float),
   q_sorted: List(Float),
   n: Float,
@@ -197,7 +199,6 @@ fn walk_quantile(
   j: Int,
   u_prev: Float,
   acc: Float,
-  squared: Bool,
 ) -> Float {
   case p_sorted, q_sorted {
     [p_val, ..p_tail], [q_val, ..q_tail] -> {
@@ -205,12 +206,7 @@ fn walk_quantile(
       let u_q = int_to_float(j + 1) /. m
       let u_next = float.min(u_p, u_q)
       let delta = p_val -. q_val
-      let height = case squared {
-        True -> delta *. delta
-        False -> float.absolute_value(delta)
-      }
-      let new_acc = acc +. height *. { u_next -. u_prev }
-      // Advance whichever list has the smaller breakpoint (or both on tie).
+      let new_acc = acc +. delta *. delta *. { u_next -. u_prev }
       let advance_p = u_p <=. u_q
       let advance_q = u_q <=. u_p
       let next_p = case advance_p {
@@ -229,7 +225,7 @@ fn walk_quantile(
         True -> j + 1
         False -> j
       }
-      walk_quantile(
+      walk_quantile_squared(
         next_p,
         next_q,
         n,
@@ -238,8 +234,50 @@ fn walk_quantile(
         next_j,
         u_next,
         new_acc,
-        squared,
       )
+    }
+    _, _ -> acc
+  }
+}
+
+/// O(n+m) quantile-integral walk for W_1 over `{(i+1)/n} ∪ {(j+1)/m}`.
+/// Slab contribution `|p_i − q_j| · Δu`. Twin of `walk_quantile_squared`.
+fn walk_quantile_abs(
+  p_sorted: List(Float),
+  q_sorted: List(Float),
+  n: Float,
+  m: Float,
+  i: Int,
+  j: Int,
+  u_prev: Float,
+  acc: Float,
+) -> Float {
+  case p_sorted, q_sorted {
+    [p_val, ..p_tail], [q_val, ..q_tail] -> {
+      let u_p = int_to_float(i + 1) /. n
+      let u_q = int_to_float(j + 1) /. m
+      let u_next = float.min(u_p, u_q)
+      let new_acc =
+        acc +. float.absolute_value(p_val -. q_val) *. { u_next -. u_prev }
+      let advance_p = u_p <=. u_q
+      let advance_q = u_q <=. u_p
+      let next_p = case advance_p {
+        True -> p_tail
+        False -> p_sorted
+      }
+      let next_q = case advance_q {
+        True -> q_tail
+        False -> q_sorted
+      }
+      let next_i = case advance_p {
+        True -> i + 1
+        False -> i
+      }
+      let next_j = case advance_q {
+        True -> j + 1
+        False -> j
+      }
+      walk_quantile_abs(next_p, next_q, n, m, next_i, next_j, u_next, new_acc)
     }
     _, _ -> acc
   }
