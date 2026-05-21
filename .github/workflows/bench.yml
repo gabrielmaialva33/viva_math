@@ -1,0 +1,43 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Precision and ODE benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28.0"
+          gleam-version: "1.16.0"
+
+      - name: Download dependencies
+        run: gleam deps download
+
+      - name: Run precision benchmark
+        run: gleam run -m bench_precision > precision_results.txt
+
+      - name: Run ODE benchmark
+        run: gleam run -m bench_ode > ode_results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            precision_results.txt
+            ode_results.txt
+          if-no-files-found: error

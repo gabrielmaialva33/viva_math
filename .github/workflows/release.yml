@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish package and release
+    runs-on: ubuntu-latest
+    env:
+      HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28.0"
+          gleam-version: "1.16.0"
+
+      - name: Download dependencies
+        run: gleam deps download
+
+      - name: Publish to Hex
+        if: ${{ env.HEX_API_KEY != '' }}
+        env:
+          HEXPM_API_KEY: ${{ env.HEX_API_KEY }}
+        run: gleam publish --yes
+
+      - name: Skip Hex publish
+        if: ${{ env.HEX_API_KEY == '' }}
+        run: echo "HEX_API_KEY is not configured; skipping gleam publish."
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes
