@@ -1,8 +1,10 @@
-//// Property tests — mathematical invariants that must hold for all inputs.
+//// Invariant tests — mathematical identities that must hold across the
+//// input domain. Renamed from `property_test.gleam` to disambiguate from
+//// `qcheck_test.gleam`, which uses generative property-based testing.
 ////
-//// Unlike `precision_test.gleam` (which checks specific golden values), these
-//// verify universal identities like "PDF integrates to 1" or "softmax sums
-//// to 1" using sampling across the input domain.
+//// Unlike `precision_test.gleam` (which checks specific golden values), this
+//// file verifies universal identities like "PDF integrates to 1" or
+//// "softmax sums to 1" by sampling across the input domain.
 
 import gleam/float
 import gleam/list
