@@ -63,7 +63,7 @@ import viva_math/scalar
 import viva_math/vector
 
 /// Library version.
-pub const version = "1.2.100"
+pub const version = "1.2.101"
 
 /// Create a PAD vector with clamping. Shorthand for `vector.pad/3`.
 pub fn pad(pleasure: Float, arousal: Float, dominance: Float) -> vector.Vec3 {
