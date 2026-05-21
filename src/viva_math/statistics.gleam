@@ -441,3 +441,66 @@ fn float_floor(x: Float) -> Float {
 fn float_ceil(x: Float) -> Float {
   float.ceiling(x)
 }
+
+// ============================================================================
+// Linear / logarithmic spacing & cumulative reductions
+// ============================================================================
+
+/// `n` evenly-spaced values between `start` and `stop`.
+///
+/// - `endpoint = True`: includes `stop` (mimics NumPy `linspace(...)`).
+/// - `endpoint = False`: excludes `stop` (half-open, mimics `arange`-like).
+/// - `n <= 0` → `[]`. `n == 1` → `[start]` regardless of `endpoint`.
+pub fn linear_space(
+  start: Float,
+  stop: Float,
+  steps: Int,
+  endpoint: Bool,
+) -> List(Float) {
+  case steps {
+    n if n <= 0 -> []
+    1 -> [start]
+    n -> {
+      let divisor = case endpoint {
+        True -> int_to_float(n - 1)
+        False -> int_to_float(n)
+      }
+      let delta = { stop -. start } /. divisor
+      list.repeat(0, n)
+      |> list.index_map(fn(_, i) { start +. delta *. int_to_float(i) })
+    }
+  }
+}
+
+/// `n` values logarithmically spaced (in `base`) between `base^start` and
+/// `base^stop`. `endpoint` follows the same convention as `linear_space`.
+pub fn logarithmic_space(
+  start: Float,
+  stop: Float,
+  steps: Int,
+  endpoint: Bool,
+  base: Float,
+) -> List(Float) {
+  linear_space(start, stop, steps, endpoint)
+  |> list.map(fn(exponent) { scalar.pow(base, exponent) })
+}
+
+/// Running sum `[x₀, x₀+x₁, x₀+x₁+x₂, …]`.
+pub fn cumulative_sum(xs: List(Float)) -> List(Float) {
+  let #(out, _) =
+    list.fold(xs, #([], 0.0), fn(acc, x) {
+      let next = acc.1 +. x
+      #([next, ..acc.0], next)
+    })
+  list.reverse(out)
+}
+
+/// Running product `[x₀, x₀·x₁, x₀·x₁·x₂, …]`.
+pub fn cumulative_product(xs: List(Float)) -> List(Float) {
+  let #(out, _) =
+    list.fold(xs, #([], 1.0), fn(acc, x) {
+      let next = acc.1 *. x
+      #([next, ..acc.0], next)
+    })
+  list.reverse(out)
+}
