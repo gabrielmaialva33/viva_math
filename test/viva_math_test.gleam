@@ -1214,3 +1214,74 @@ pub fn vfe_log_evidence_gaussian_known_test() {
   is_close(lp, expected, 1.0e-12)
   |> should.be_true
 }
+
+// ============================================================================
+// Deep-audit regression tests (Codex GPT-5.5 deep review, post-1.2.102)
+// ============================================================================
+
+// Regression: ELBO with q_var <= 0 must NOT exceed log p(x) — previously
+// the reconstruction term silently inflated and broke the Jensen bound.
+pub fn vfe_elbo_negative_q_var_does_not_break_bound_test() {
+  let e = free_energy.elbo(0.0, 0.0, -10.0, 0.0, 1.0, 1.0)
+  let logp = free_energy.log_evidence_gaussian(0.0, 0.0, 1.0, 1.0)
+  should.be_true(e.total <=. logp +. 1.0e-9)
+}
+
+// Regression: log_evidence_gaussian must reject componentwise-invalid
+// variance (negative likelihood compensated by positive prior in the sum).
+pub fn vfe_log_evidence_rejects_componentwise_invalid_variance_test() {
+  let lp = free_energy.log_evidence_gaussian(0.0, 0.0, 2.0, -1.0)
+  should.be_true(lp <. -999_999.0)
+}
+
+// OU mean_at composes over time: integrating once over t1+t2 equals
+// integrating over t1 then t2 (deterministic part of the SDE — semigroup
+// property of the transition kernel).
+pub fn ou_mean_at_composes_over_time_test() {
+  let params = ou.OUParams1D(theta: 0.7, mu: -0.3, sigma: 0.2)
+  let x0 = 1.4
+  let t1 = 0.8
+  let t2 = 1.2
+  let once = ou.mean_at(params, x0, t1 +. t2)
+  let twice = ou.mean_at(params, ou.mean_at(params, x0, t1), t2)
+  should.be_true(is_close(once, twice, 1.0e-12))
+}
+
+// Wasserstein-2 triangle inequality across unequal sample sizes.
+pub fn wasserstein_2_triangle_unequal_sizes_test() {
+  let assert Ok(d_pr) = transport.wasserstein_2_empirical([0.0], [4.0])
+  let assert Ok(d_pq) = transport.wasserstein_2_empirical([0.0], [1.0, 2.0])
+  let assert Ok(d_qr) = transport.wasserstein_2_empirical([1.0, 2.0], [4.0])
+  should.be_true(d_pr <=. d_pq +. d_qr +. 1.0e-9)
+}
+
+// Sequential Bayes via mean_field_iterate must match a single flat-batch
+// mean_field_update (Bishop §2.3.6 — Gaussian-Gaussian conjugacy is
+// associative under repeated updates).
+pub fn vfe_mean_field_iterate_matches_flat_batch_test() {
+  let prior = free_energy.MeanFieldParams(q_mean: 0.0, q_var: 1.0)
+  let assert Ok(seq) =
+    free_energy.mean_field_iterate([[1.0, 2.0], [3.0]], prior, 0.5)
+  let assert Ok(flat) =
+    free_energy.mean_field_update([1.0, 2.0, 3.0], 0.0, 1.0, 0.5)
+  should.be_true(is_close(seq.q_mean, flat.q_mean, 1.0e-12))
+  should.be_true(is_close(seq.q_var, flat.q_var, 1.0e-12))
+}
+
+// Regression: wasserstein_2_gaussian must normalise negative stddev.
+pub fn wasserstein_2_gaussian_negative_stddev_test() {
+  let d =
+    transport.wasserstein_2_gaussian(
+      distributions.Gaussian(mean: 0.0, stddev: -1.0),
+      distributions.Gaussian(mean: 0.0, stddev: 1.0),
+    )
+  should.be_true(is_close(d, 0.0, 1.0e-12))
+}
+
+// Regression: Laplace approximation must reject near-zero curvature
+// (would yield q_var = +∞ otherwise).
+pub fn vfe_laplace_rejects_flat_log_posterior_test() {
+  let nearly_flat = fn(z: Float) { 0.0 -. 1.0e-300 *. z *. z }
+  free_energy.laplace_approximation(nearly_flat, 0.0, 0.1, 50)
+  |> should.equal(Error(Nil))
+}
