@@ -254,9 +254,130 @@ stating the **local derivative rule** it implements (e.g., `mul: ∂z/∂a = b,
 invariant. The audit confirmed `tdigest` and `special` already had complete
 public docstrings.
 
+### Encapsulation — opaque types
+
+Five types whose direct construction could produce invariant-violating
+states are now `pub opaque type`. Surface accessors added where consumers
+needed read access. Cross-checked against `qcheck` (`pub opaque Seed`) and
+`gleam-lang/stdlib` (most concrete types are constructed via smart
+constructors).
+
+- **`viva_math/matrix_dense.DenseMat`** — `BitArray data` previously
+  allowed to mismatch the declared `rows × cols × 8` shape. New accessors:
+  `rows/1`, `cols/1`, `shape/1`.
+- **`viva_math/tdigest.TDigest`** + **`Centroid`** — direct construction
+  could violate the sorted-centroid invariant or desync
+  `total_weight ↔ Σ weights`. New accessors: `compression/1`,
+  `centroid_mean/1`, `centroid_weight/1`.
+- **`viva_math/autodiff_reverse.Tape`** — corruptible `(nodes, next_id)`
+  could break gradient propagation; opaque, threaded via forward ops.
+- **`viva_math/autodiff_reverse.Node`** — paired forward value + `Op`,
+  constructed only by `push`.
+- **`viva_math/autodiff_reverse.Op`** — constructors (`Input`, `Add`,
+  `Sub`, `Mul`, `Div`, `Neg`, `Scale`, `Exp`, `Ln`, `Sin`, `Cos`, `Tanh`,
+  `Sigmoid`, `Pow`) no longer exposed; callers build expressions through
+  the high-level forward ops.
+
+External call sites refactored:
+- `test/matrix_dense_test.gleam:14–15` — `m.rows`/`m.cols` →
+  `md.rows(m)`/`md.cols(m)`.
+- `test/tdigest_test.gleam:23` — `d.compression` → `td.compression(d)`.
+
+`Tape`, `Node`, `Op`, `Centroid` had **zero external call sites** — purely
+internal refactor.
+
+### Deprecation — idiomatic Result-returning function names
+
+`viva_math/scalar` adds wrappers aligned with `gleam/float`'s convention
+(name the math operation, let the `Result` type communicate failure;
+reserve `try` for the `result.try` combinator):
+
+| New (idiomatic) | Deprecated alias |
+|---|---|
+| `logarithm/1` | `try_ln/1` |
+| `logarithm_2/1` | `try_log2/1` |
+| `logarithm_10/1` | `try_log10/1` |
+| `square_root/1` | `try_sqrt/1` |
+| `cube_root/1` | `try_cbrt/1` |
+| `nth_root/2` | `try_nth_root/2` |
+
+The legacy `try_*` functions stay around as `@deprecated` wrappers — they
+call the new names so semantics are identical. Internal callers
+(`free_energy`, `entropy`, `ou`, `free_energy_variational_test`) all
+migrated to the idiomatic names, leaving the build warning-free.
+
+### Renamed
+
+- `test/property_test.gleam` → `test/invariant_test.gleam`. Disambiguates
+  from `test/qcheck_test.gleam` (which uses `qcheck`-generated samples for
+  *true* property-based testing). The new file's docstring explains the
+  distinction.
+
+### Numerical precision audit (post-encapsulation)
+
+Codex GPT-5.5 god-audit inventoried the full public surface — **632 items
+across 29 modules, ~40% direct test coverage** — and flagged loose
+tolerances on closed-form identities. The audit was anchored against
+CPython's `test_math.py` ulp-based testing and N1630 (WG14) edge-case
+recommendations.
+
+**Tolerance tightening — 8 closed-form identities pulled to IEEE-754
+precision** (`1e-3` / `1e-6` → `1e-12` / `1e-15`):
+
+| Test | Identity | Before | After |
+|---|---|---|---|
+| `common.sigmoid(0, 1)` | `= 0.5` exact | `1e-3` | `1e-15` |
+| `softmax_sum_to_one` | `Σ softmax = 1` | `1e-3` | `1e-12` |
+| `vec3_length(3,4,0)` | Pythagorean triple `= 5` | `1e-3` | `1e-15` |
+| `scalar.erf(1)` | tabulated, libm `:math.erf` | `1e-6` | `1e-12` |
+| `scalar.softplus(0)` | `= ln(2)` | `1e-6` | `1e-15` |
+| `scalar.logsumexp([0,0])` | `= ln(2)` | `1e-6` | `1e-15` |
+| `constants.pi` | double-precision literal | `1e-6` | `1e-15` |
+| `autodiff.gelu' at 0` | `= 0.5` closed form | `1e-3` | `1e-12` |
+
+**`test/test_support.gleam` extended** with hybrid tolerance helpers:
+
+- `is_close_rel/3` — relative comparator `|a−b| ≤ rel_tol·max(|a|,|b|)`
+- `is_close_hybrid/4` — passes if **either** absolute or relative tolerance
+  holds (mirrors CPython's `result_check`)
+- Constants: `tight = 1e-12`, `machine = 1e-15`, `transcendental = 1e-13`,
+  `loose = 1e-6` — encode the precision regime in the call site
+
+### Added — algebraic identity tests (`test/identities_test.gleam`)
+
+14 universal-law tests that golden-value testing misses:
+
+- **Round-trips**: `exp(ln(x)) = x`, `ln(exp(x)) = x`, `sqrt(x)² = x`,
+  `cbrt(x)³ = x`, `sin² + cos² = 1`
+- **Translation invariance**: `softmax(x + c) = softmax(x)` (stable-softmax
+  Jensen invariant)
+- **Special-function recurrences**: `Γ(x+1) = x·Γ(x)`, `ψ(x+1) = ψ(x) + 1/x`,
+  `lbeta(x,y) = lgamma(x) + lgamma(y) − lgamma(x+y)`
+- **OU limit behaviour**: `Var(t→∞) = σ²/(2θ)`, `step(dt=0) = x_0`,
+  `mean_at(t=0) = x_0`
+- **Cusp consistency**: `cusp.gradient = d/dx cusp.potential` (via central
+  finite differences at `h = 1e-5`, tolerance `1e-7`)
+- **Matrix algebra**: `det(Aᵀ) = det(A)`
+
+### Added — edge-case tests (`test/edge_cases_test.gleam`)
+
+18 boundary tests anchored on N1630 + CPython conventions:
+
+- **Domain rejection**: `square_root(-x)`, `logarithm(0)`,
+  `logarithm(-x)`, `nth_root(x, 0)`, `nth_root(x, -1)`,
+  `nth_root(-x, even)` all return `Error(Nil)`
+- **Identity at boundaries**: `square_root(0)`, `cube_root(0)`,
+  `logarithm(1) = 0`, `nth_root(x, 1) = x`
+- **Cube root negative-real**: `∛(-8) = -2`, 5th-root of -32 = -2
+- **Power-of-base logs exact**: `log₂(2ⁿ) = n`, `log₁₀(10ⁿ) = n`
+- **`expm1` cancellation defence**: `expm1(1e-10)/x ≈ 1` (would lose ~10
+  significant digits with `exp(x) - 1`)
+- **OU vec3 path coverage**: `is_valid_vec3` accepts/rejects correctly,
+  `stationary_std`, `variance_at(t = 1e6)` saturates to stationary variance
+
 ### Validated
 
-- **436 tests passing** (was 333 → +103; +156 vs 1.2.101).
+- **468 tests passing** (was 436 → +32; +188 vs 1.2.101).
 - `gleam format --check src test` clean.
 - `gleam check` clean.
 
