@@ -11,8 +11,8 @@ import viva_math/matrix_dense as md
 
 pub fn md_zeros_shape_test() {
   let assert Ok(m) = md.zeros(2, 3)
-  should.equal(m.rows, 2)
-  should.equal(m.cols, 3)
+  should.equal(md.rows(m), 2)
+  should.equal(md.cols(m), 3)
 }
 
 pub fn md_zeros_invalid_dim_test() {

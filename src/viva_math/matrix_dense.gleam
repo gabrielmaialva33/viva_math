@@ -28,11 +28,33 @@ import gleam/list
 import viva_math/scalar
 
 /// Row-major dense matrix backed by a `BitArray` of 64-bit little-endian
-/// floats (8 bytes per cell). Shape invariant: `byte_size(data) = rows·cols·8`;
-/// constructors enforce it. Callers should treat the type as if it were
-/// opaque — direct construction can violate the shape invariant.
-pub type DenseMat {
+/// floats (8 bytes per cell). Shape invariant: `byte_size(data) = rows·cols·8`.
+///
+/// Opaque to prevent direct construction with a `data` blob whose size does
+/// not match the declared shape. Use `zeros`, `identity`, or `from_list` to
+/// build a `DenseMat` and the `rows`, `cols`, `byte_size` accessors to query
+/// its shape.
+pub opaque type DenseMat {
   DenseMat(rows: Int, cols: Int, data: BitArray)
+}
+
+// ============================================================================
+// Accessors
+// ============================================================================
+
+/// Number of rows in the matrix.
+pub fn rows(m: DenseMat) -> Int {
+  m.rows
+}
+
+/// Number of columns in the matrix.
+pub fn cols(m: DenseMat) -> Int {
+  m.cols
+}
+
+/// Shape as `#(rows, cols)`.
+pub fn shape(m: DenseMat) -> #(Int, Int) {
+  #(m.rows, m.cols)
 }
 
 // ============================================================================
