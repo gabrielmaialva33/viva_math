@@ -6,7 +6,7 @@ Thanks for your interest in contributing to viva_math!
 
 ```bash
 # Clone the repository
-git clone https://github.com/mrootx/viva_math.git
+git clone https://github.com/gabrielmaialva33/viva_math.git
 cd viva_math
 
 # Install dependencies
@@ -33,9 +33,14 @@ gleam format
 
 ### Testing
 
-- Add tests for new functions in `test/viva_math_test.gleam`
-- Tests should be self-contained and descriptive
-- Use `is_close` helper for floating point comparisons
+- Add tests to the matching `test/<module>_test.gleam` file (mirrors
+  `src/viva_math/<module>.gleam`) — `gleeunit` discovers any public
+  `*_test` function in `test/`. Examples: `test/ou_test.gleam`,
+  `test/transport_test.gleam`, `test/free_energy_variational_test.gleam`.
+- Import shared comparators from `test/test_support.gleam`:
+  `is_close/3`, `is_close_vec3/3`, `is_close_complex/3`, `is_close_list/3`.
+- Tests should be self-contained and descriptive.
+- Use `is_close` (not `should.equal`) for any `Float` comparison.
 
 ### Documentation
 
@@ -66,7 +71,7 @@ refactor: simplify trigonometric_roots
 
 ## Questions?
 
-Open an issue or reach out to @mrootx.
+Open an issue or reach out to @gabrielmaialva33.
 
 ## License
 

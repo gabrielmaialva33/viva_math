@@ -7,8 +7,8 @@
 [![Erlang+JS](https://img.shields.io/badge/Erlang_%2B_JS-4B275F?style=for-the-badge)](https://gleam.run/news/multi-target-compilation/)
 [![Hex](https://img.shields.io/badge/hex.pm-viva__math-A678DD?style=for-the-badge&logo=hex&logoColor=white)](https://hex.pm/packages/viva_math)
 [![PAD](https://img.shields.io/badge/PAD-Mehrabian_1996-7C3AED?style=for-the-badge)](https://en.wikipedia.org/wiki/PAD_emotional_state_model)
-[![Tests](https://img.shields.io/badge/tests-58_passing-00875A?style=for-the-badge)](./test)
-[![Version](https://img.shields.io/badge/version-1.2.0-CD5C5C?style=for-the-badge)](./CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-333_passing-00875A?style=for-the-badge)](./test)
+[![Version](https://img.shields.io/badge/version-1.2.102-CD5C5C?style=for-the-badge)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-228B22?style=for-the-badge)](./LICENSE)
 
 ---
@@ -26,8 +26,9 @@
 > Principle, attractor dynamics, and information theory — all expressed as
 > small, type-safe Gleam functions.
 >
-> Built on [gleam_community_maths](https://hexdocs.pm/gleam_community_maths/),
-> targeting **Erlang + JavaScript**.
+> Self-contained: depends only on `gleam_stdlib` at runtime. All
+> transcendentals route through `viva_math/scalar` (Erlang `:math` BIFs).
+> Targets the **BEAM (Erlang)**.
 
 ---
 
@@ -43,12 +44,12 @@ Thom 1972, Friston 2010, Shannon 1948).
 
 | Property       | Value                                                          |
 |:---------------|:---------------------------------------------------------------|
-| **Language**   | Pure Gleam (type-safe functional)                              |
-| **Targets**    | Erlang (BEAM) + JavaScript                                     |
-| **Built on**   | `gleam_community_maths` ≥ 2.0                                  |
-| **Tests**      | 58 passing                                                     |
-| **Domain**     | Affective computing, dynamical systems, info theory            |
-| **Public API** | `viva_math/{common,vector,cusp,free_energy,attractor,entropy}` |
+| **Language**   | Pure Gleam (type-safe functional)                                                                                 |
+| **Target**     | Erlang (BEAM)                                                                                                     |
+| **Runtime deps** | `gleam_stdlib` only                                                                                             |
+| **Tests**      | 333 passing                                                                                                       |
+| **Domain**     | Affective computing, dynamical systems, info theory, optimal transport                                            |
+| **Public API** | `viva_math/{scalar,common,vector,cusp,free_energy,attractor,entropy,ou,transport,ode,statistics,distributions,…}` |
 
 ---
 
@@ -210,7 +211,7 @@ Rényi `H_α`, and a **hybrid affective entropy**
 | **Type-safe affect**            | `Vec3` constructor enforces PAD axis order at compile time    |
 | **Multi-target**                | Same code runs on BEAM and in the browser via JS target       |
 | **Small surface, deep meaning** | 6 modules, ~60 public functions — nothing speculative         |
-| **Zero runtime deps**           | Builds only on `gleam_stdlib` + `gleam_community_maths`       |
+| **Zero runtime deps**           | Builds only on `gleam_stdlib` (self-contained since 1.2.101) |
 
 ---
 
@@ -295,7 +296,7 @@ let r = entropy.renyi([0.2, 0.3, 0.5], alpha: 2.0)
 
 ```bash
 git checkout -b feature/your-feature
-gleam test                  # 58 tests
+gleam test                  # 333 tests
 gleam format --check src test
 gleam docs build
 ```
