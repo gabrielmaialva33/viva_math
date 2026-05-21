@@ -841,19 +841,28 @@ pub fn elbo(
   prior_var: Float,
   likelihood_var: Float,
 ) -> ELBO {
-  let kl = scalar_gaussian_kl(q_mean, q_var, prior_mean, prior_var)
-  let recon = case likelihood_var <=. 0.0 {
-    True -> 0.0 -. large_penalty()
+  // Reject any non-positive variance up-front — otherwise the reconstruction
+  // term silently inflates (via `q_var` in the numerator) while the KL is
+  // floored at `0.0`, and the resulting "ELBO" can exceed `log p(x)`,
+  // violating the Jensen bound that justifies VI.
+  case q_var <=. 0.0 || prior_var <=. 0.0 || likelihood_var <=. 0.0 {
+    True ->
+      ELBO(
+        reconstruction: 0.0 -. large_penalty(),
+        kl_divergence: large_penalty(),
+        total: 0.0 -. large_penalty(),
+      )
     False -> {
+      let kl = scalar_gaussian_kl(q_mean, q_var, prior_mean, prior_var)
       let log_2pi_var =
         scalar.try_ln(2.0 *. constants.pi *. likelihood_var)
         |> result.unwrap(0.0)
       let err2 = { observation -. q_mean } *. { observation -. q_mean }
       let term = { err2 +. q_var } /. { 2.0 *. likelihood_var }
-      0.0 -. 0.5 *. log_2pi_var -. term
+      let recon = 0.0 -. 0.5 *. log_2pi_var -. term
+      ELBO(reconstruction: recon, kl_divergence: kl, total: recon -. kl)
     }
   }
-  ELBO(reconstruction: recon, kl_divergence: kl, total: recon -. kl)
 }
 
 /// 1D Gaussian KL — `D_KL(N(μ₁, σ₁²) ‖ N(μ₂, σ₂²))`.
@@ -968,7 +977,12 @@ pub fn laplace_approximation(
   let f_zero = log_posterior(mode)
   let f_minus = log_posterior(mode -. h)
   let second = { f_plus -. 2.0 *. f_zero +. f_minus } /. { h *. h }
-  case second <. 0.0 {
+  // Require curvature strictly negative AND non-degenerate: a near-zero
+  // `second` (e.g. `-1.0e-300`) would yield `q_var ≈ +∞`, which is not a
+  // valid Gaussian fit. Threshold at `1e-12` is the smallest reasonable
+  // curvature given `O(h²)` finite-difference roundoff at `h = 1e-4`.
+  let curvature_threshold = 1.0e-12
+  case second <. 0.0 -. curvature_threshold {
     False -> Error(Nil)
     True -> {
       let q_var = 0.0 -. 1.0 /. second
@@ -1005,10 +1019,13 @@ pub fn log_evidence_gaussian(
   prior_var: Float,
   likelihood_var: Float,
 ) -> Float {
-  let marginal_var = prior_var +. likelihood_var
-  case marginal_var <=. 0.0 {
+  // Reject **either** variance non-positive, not just their sum: a negative
+  // `likelihood_var` cancelled by a larger positive `prior_var` would still
+  // produce a finite log-density that is meaningless.
+  case prior_var <=. 0.0 || likelihood_var <=. 0.0 {
     True -> 0.0 -. large_penalty()
     False -> {
+      let marginal_var = prior_var +. likelihood_var
       let err = observation -. prior_mean
       let log_2pi_var =
         scalar.try_ln(2.0 *. constants.pi *. marginal_var)
