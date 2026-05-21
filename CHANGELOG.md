@@ -67,9 +67,37 @@ References: Beal (2003); Bishop (2006) ch. 10; Friston (2010).
 - `test/viva_math_test.gleam` gained unit tests for `ou.*`, the Bayesian
   block of `free_energy.*`, and `transport.*`.
 
+### Fixed (post-review)
+
+Rigorous mathematical audit (Codex GPT-5.3 + manual cross-check) identified
+one bug and several documentation gaps, all addressed before release:
+
+- **`transport.wasserstein_2_empirical`** (`|p| ≠ |q|`): rewrote the unequal
+  sample-size branch via quantile-based integration over the union of
+  breakpoints `{i/n} ∪ {j/m}`. The previous CDF-gap path `∫(F_P − F_Q)² dx`
+  is only valid for `W_1` (the W_1/W_2 duality via integration by parts
+  breaks under the quadratic kernel). Confirmed by counterexample:
+  `P=[0,2], Q=[1]` returns `W_2 = 1.0` (was `≈ 0.707`).
+- **`ou.step` and `ou.variance_at`**: routed `1 − e^(−2θΔ)` through
+  `scalar.expm1` to recover the Brownian limit `σ²·t` (as `θ·t → 0`)
+  without catastrophic cancellation.
+- **`ou.variance_at` docstring**: explicit note that `x0` is mathematically
+  ignored (signature kept only for API symmetry with `mean_at` /
+  `variance_at_vec3`).
+- **`transport.wasserstein_pad` docstring**: explicit that it is a
+  componentwise/marginal **pseudo-metric** (triangle inequality holds via
+  Minkowski; identity of indiscernibles fails for joint distributions with
+  identical marginals), **not** the multivariate `W_2`.
+- **Property tests added**: `property_wasserstein_2_unequal_known_test`
+  (would catch the fixed bug), `property_wasserstein_2_unequal_symmetric_test`,
+  `property_scalar_gaussian_kl_unequal_var_nonneg_test` (exercises the
+  `log(σ_p²/σ_q²)` term that the equal-variance test left untouched), and
+  `property_ou_variance_brownian_limit_test` (regression guard for the
+  `expm1` rewrite).
+
 ### Validated
 
-- 322 tests passing (was 280 at 1.2.101) — net +42 tests.
+- 326 tests passing (was 280 at 1.2.101) — net +46 tests.
 - `gleam format --check src test` clean.
 
 ## [1.2.101] - 2026-05-21
