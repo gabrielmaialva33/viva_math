@@ -43,7 +43,38 @@ pub fn is_close_list(a: List(Float), b: List(Float), tol: Float) -> Bool {
 }
 
 /// Default tight tolerance for closed-form algebraic identities.
+/// `1e-12` ≈ ~10 ulps of an IEEE-754 double near `1.0`.
 pub const tight: Float = 1.0e-12
+
+/// "Machine-precision" tolerance — used when the only error is the final
+/// rounding of a single IEEE-754 operation. `1e-15` is roughly 4-5 ulps.
+pub const machine: Float = 1.0e-15
+
+/// Default tolerance for transcendental round-trips (`exp(ln(x)) = x`,
+/// `sqrt(x²) = x`) where one operation accumulates ~10 ulps.
+pub const transcendental: Float = 1.0e-13
 
 /// Default loose tolerance for stochastic / Monte-Carlo / iterative checks.
 pub const loose: Float = 1.0e-6
+
+/// Relative-error comparator: `|a − b| ≤ tol·max(|a|, |b|)`.
+/// Use for values whose magnitude is far from 1 (where `is_close` with an
+/// absolute tolerance would be either too loose or too strict).
+pub fn is_close_rel(a: Float, b: Float, rel_tol: Float) -> Bool {
+  let scale = float.max(float.absolute_value(a), float.absolute_value(b))
+  case scale {
+    0.0 -> is_close(a, b, rel_tol)
+    _ -> float.absolute_value(a -. b) <=. rel_tol *. scale
+  }
+}
+
+/// Hybrid comparator: passes if either absolute or relative tolerance holds.
+/// Matches CPython's `result_check` convention for math library tests.
+pub fn is_close_hybrid(
+  a: Float,
+  b: Float,
+  abs_tol: Float,
+  rel_tol: Float,
+) -> Bool {
+  is_close(a, b, abs_tol) || is_close_rel(a, b, rel_tol)
+}

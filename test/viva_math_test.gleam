@@ -75,9 +75,9 @@ pub fn lerp_test() {
 }
 
 pub fn sigmoid_center_test() {
-  // sigmoid(0) should be 0.5
+  // sigmoid(0) = 0.5 — closed-form, exact in IEEE 754 double precision.
   let result = common.sigmoid(0.0, 1.0)
-  should.be_true(is_close(result, 0.5, 0.001))
+  should.be_true(is_close(result, 0.5, 1.0e-15))
 }
 
 pub fn sigmoid_extremes_test() {
@@ -103,9 +103,11 @@ pub fn softmax_test() {
 }
 
 pub fn softmax_sum_to_one_test() {
+  // Σ softmax = 1 is an algebraic identity — stable softmax should achieve
+  // machine precision after accounting for ~3 ulps of summation error.
   let assert Ok(result) = common.softmax([1.0, 2.0, 3.0])
   let sum = list.fold(result, 0.0, fn(acc, x) { acc +. x })
-  should.be_true(is_close(sum, 1.0, 0.001))
+  should.be_true(is_close(sum, 1.0, 1.0e-12))
 }
 
 pub fn safe_div_test() {
@@ -154,9 +156,10 @@ pub fn vec3_dot_test() {
 }
 
 pub fn vec3_length_test() {
+  // (3, 4, 0) is the Pythagorean triple — `sqrt(25) = 5` is exact in IEEE.
   let v = Vec3(3.0, 4.0, 0.0)
   let len = vector.length(v)
-  should.be_true(is_close(len, 5.0, 0.001))
+  should.be_true(is_close(len, 5.0, 1.0e-15))
 }
 
 pub fn vec3_distance_test() {
@@ -602,8 +605,8 @@ pub fn scalar_erf_zero_test() {
 }
 
 pub fn scalar_erf_one_test() {
-  // erf(1) ≈ 0.8427007929
-  should.be_true(is_close(scalar.erf(1.0), 0.8427007929, 1.0e-6))
+  // erf(1) = 0.84270079294971486934... — Erlang :math.erf is libm-quality.
+  should.be_true(is_close(scalar.erf(1.0), 0.842_700_792_949_715, 1.0e-12))
 }
 
 pub fn scalar_erfc_complement_test() {
@@ -628,13 +631,13 @@ pub fn scalar_silu_zero_test() {
 }
 
 pub fn scalar_softplus_zero_test() {
-  // softplus(0) = ln(2)
-  should.be_true(is_close(scalar.softplus(0.0), constants.ln_2, 1.0e-6))
+  // softplus(0) = ln(1 + 1) = ln(2) — single libm call, ~1 ulp.
+  should.be_true(is_close(scalar.softplus(0.0), constants.ln_2, 1.0e-15))
 }
 
 pub fn scalar_logsumexp_test() {
-  // logsumexp([0, 0]) = ln(2)
-  should.be_true(is_close(scalar.logsumexp([0.0, 0.0]), constants.ln_2, 1.0e-6))
+  // logsumexp([0, 0]) = ln(exp(0) + exp(0)) = ln(2) — exact via stable trick.
+  should.be_true(is_close(scalar.logsumexp([0.0, 0.0]), constants.ln_2, 1.0e-15))
 }
 
 pub fn scalar_relu_test() {
@@ -652,7 +655,8 @@ pub fn scalar_hypot_test() {
 // ============================================================================
 
 pub fn constants_pi_test() {
-  should.be_true(is_close(constants.pi, 3.14159265, 1.0e-6))
+  // π to double precision: 3.141_592_653_589_793 (15 sig digits).
+  should.be_true(is_close(constants.pi, 3.141_592_653_589_793, 1.0e-15))
 }
 
 pub fn constants_tau_test() {

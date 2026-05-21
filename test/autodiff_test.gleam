@@ -178,11 +178,11 @@ pub fn ad_sub_value_and_tangent_test() {
   is_close(s.tangent, -4.0, 1.0e-12) |> should.be_true
 }
 
-// GELU is differentiable at 0 with derivative 0.5 (centered between ReLU's
-// discontinuous 0 and 1 ends).
+// GELU at 0: GELU(x) = x·Φ(x), so d/dx GELU(0) = Φ(0) + 0·φ(0) = 0.5 exactly.
+// Tight tolerance — Φ(0) = 0.5 is a closed-form value with no rounding.
 pub fn ad_gelu_derivative_at_zero_test() {
   let g = ad.grad(ad.gelu, 0.0)
-  is_close(g, 0.5, 1.0e-3) |> should.be_true
+  is_close(g, 0.5, 1.0e-12) |> should.be_true
 }
 
 // ============================================================================
