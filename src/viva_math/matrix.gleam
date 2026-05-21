@@ -259,6 +259,111 @@ pub fn mat3_frobenius(m: Mat3) -> Float {
   )
 }
 
+// ============================================================================
+// Eigenvalues (closed form)
+// ============================================================================
+
+/// Real eigenvalues of a 2×2 matrix via the characteristic quadratic.
+///
+/// λ² - tr(M)·λ + det(M) = 0  →  λ = (tr ± √(tr² - 4·det)) / 2.
+///
+/// Returns `Error` for matrices with non-real eigenvalues (negative
+/// discriminant). For symmetric matrices the discriminant is always
+/// non-negative, so this always succeeds.
+pub fn mat2_eigenvalues(m: Mat2) -> Result(#(Float, Float), Nil) {
+  let tr = mat2_trace(m)
+  let det = mat2_determinant(m)
+  let discriminant = tr *. tr -. 4.0 *. det
+  case discriminant <. 0.0 {
+    True -> Error(Nil)
+    False -> {
+      let s = scalar.sqrt(discriminant)
+      Ok(#({ tr +. s } /. 2.0, { tr -. s } /. 2.0))
+    }
+  }
+}
+
+/// Real eigenvalues of a **symmetric** 3×3 matrix via Smith's trigonometric
+/// closed form. The matrix must be (numerically) symmetric.
+///
+/// Algorithm: characteristic cubic det(M - λI) = 0 in the form
+/// λ³ - tr·λ² + …  Then shift by p = tr/3 and solve the depressed cubic
+/// using trigonometric substitution.
+///
+/// Reference: Smith (1961) "Eigenvalues of a Symmetric 3×3 Matrix".
+pub fn mat3_symmetric_eigenvalues(
+  m: Mat3,
+) -> Result(#(Float, Float, Float), Nil) {
+  let p1 =
+    m.m12
+    *. m.m12
+    +. m.m13
+    *. m.m13
+    +. m.m23
+    *. m.m23
+
+  case p1 == 0.0 {
+    True -> {
+      // Already diagonal: eigenvalues are on the diagonal.
+      Ok(sort_three(m.m11, m.m22, m.m33))
+    }
+    False -> {
+      let q = mat3_trace(m) /. 3.0
+      let p2 =
+        { m.m11 -. q } *. { m.m11 -. q }
+        +. { m.m22 -. q } *. { m.m22 -. q }
+        +. { m.m33 -. q } *. { m.m33 -. q }
+        +. 2.0 *. p1
+      let p = scalar.sqrt(p2 /. 6.0)
+      // B = (M - qI) / p
+      let inv_p = 1.0 /. p
+      let b =
+        Mat3(
+          m11: inv_p *. { m.m11 -. q },
+          m12: inv_p *. m.m12,
+          m13: inv_p *. m.m13,
+          m21: inv_p *. m.m21,
+          m22: inv_p *. { m.m22 -. q },
+          m23: inv_p *. m.m23,
+          m31: inv_p *. m.m31,
+          m32: inv_p *. m.m32,
+          m33: inv_p *. { m.m33 -. q },
+        )
+      let r = mat3_determinant(b) /. 2.0
+      // Clamp r to [-1, 1] for acos.
+      let r_clamped = case r {
+        r if r >. 1.0 -> 1.0
+        r if r <. -1.0 -> -1.0
+        _ -> r
+      }
+      let phi = acos_safe(r_clamped) /. 3.0
+      let two_pi_over_3 = 2.094_395_102_393_195
+      let eig1 = q +. 2.0 *. p *. cosine(phi)
+      let eig3 = q +. 2.0 *. p *. cosine(phi +. two_pi_over_3)
+      let eig2 = 3.0 *. q -. eig1 -. eig3
+      Ok(sort_three(eig1, eig2, eig3))
+    }
+  }
+}
+
+fn sort_three(a: Float, b: Float, c: Float) -> #(Float, Float, Float) {
+  case a <=. b, b <=. c, a <=. c {
+    True, True, _ -> #(a, b, c)
+    True, False, True -> #(a, c, b)
+    True, False, False -> #(c, a, b)
+    False, True, True -> #(b, a, c)
+    False, True, False -> #(b, c, a)
+    _, _, _ -> #(c, b, a)
+  }
+}
+
+@external(erlang, "math", "acos")
+fn acos_raw(x: Float) -> Float
+
+fn acos_safe(x: Float) -> Float {
+  acos_raw(x)
+}
+
 /// Diagonal matrix.
 pub fn mat3_diagonal(a: Float, b: Float, c: Float) -> Mat3 {
   Mat3(a, 0.0, 0.0, 0.0, b, 0.0, 0.0, 0.0, c)
