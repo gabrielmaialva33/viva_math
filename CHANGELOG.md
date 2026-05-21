@@ -430,11 +430,78 @@ Codex surfaced two real measurement gaps from the golden-value pass:
    increase the recurrence threshold from `x ≥ 6` to `x ≥ 12`, or extend
    the series with two more Bernoulli terms.
 
+### Fixed — `special.digamma` accuracy
+
+The asymptotic series implementation pushes `x` past a threshold via the
+recurrence `ψ(x) = ψ(x+1) − 1/x` before evaluating the series truncated
+at `x⁻¹⁰`. The threshold was raised from `N = 6` to `N = 12`,
+delivering **~1000× error reduction** at no measurable runtime cost.
+
+Measured against the tabulated reference `ψ(5) = 1.506_117_668_431_800_5`:
+
+| Threshold | `ψ(5)` returned | Absolute error |
+|---|---|---|
+| `N = 6` (before) | `1.506_117_668_548_3306` | `1.17e-10` |
+| `N = 12` (after) | `1.506_117_668_431_9206` | `1.20e-13` |
+
+`test/golden_values_test.gleam:42` tightened from `2e-10` → `1e-12` and
+the `AUDIT NEEDED` comment removed.
+
+### Documentation — Tier 0/1/2 (HexDocs-first)
+
+Adopted the idiomatic Gleam approach (cf. `lustre`, `wisp`,
+`gleam_stdlib`) — **no separate docs site framework**. The
+`gleam docs build` pipeline now publishes API reference + 4 conceptual
+guides + the changelog directly to `hexdocs.pm/viva_math`.
+
+- **`docs/pad-model.md`** — the `Vec3` type, 8 emotion attractors,
+  Mehrabian (1996) coordinates.
+- **`docs/ou-dynamics.md`** — Doob exact transition kernel, closed-form
+  moments, Vec3 PAD path, cancellation defences.
+- **`docs/wasserstein.md`** — 1D empirical W₁/W₂ (with the `n ≠ m` bug
+  fixed in this release explained), Gaussian closed form, `wasserstein_pad`
+  as pseudo-metric.
+- **`docs/numerical-accuracy.md`** — tolerance regimes, measured precision
+  per function, cancellation defences (`expm1`, stable softplus,
+  logsumexp), digamma fix above.
+
+`gleam.toml` gained five `[[documentation.pages]]` entries that wire
+these into the HexDocs sidebar:
+
+```toml
+[[documentation.pages]]
+title = "Changelog"
+path = "changelog.html"
+source = "CHANGELOG.md"
+
+[[documentation.pages]]
+title = "PAD Emotional Model"
+path = "pad-model.html"
+source = "docs/pad-model.md"
+# ... (4 more)
+```
+
+### Updated — README
+
+- Test count badge: `333 → 510 passing`
+- Removed stale `gleam_community_maths` reference (dropped in 1.2.101).
+- Removed JS-target claim (FFI is Erlang-only; JS target is a roadmap
+  item that needs FFI rework).
+- Quick Start now exercises **6 modules** (was 4): `attractor`, `cusp`,
+  `free_energy`, **`ou`**, **`random`**, **`transport`**.
+- Fixed `free_energy.compute_state` call site (used wrong arity).
+- New **Guides** section linking to the 4 conceptual docs.
+- Roadmap: marked the 4 features (OU, VFE, Wasserstein, property tests)
+  as ✅ done; added new ⏳ items (multivariate Wasserstein, ULP-by-ULP
+  `mpmath` validation, JS target).
+
 ### Validated
 
-- **510 tests passing** (was 468 → +42; **+230 vs 1.2.101**).
+- **510 tests passing** (no change in count — only source-side digamma
+  fix; **+230 vs 1.2.101**).
 - `gleam format --check src test` clean.
 - `gleam check` clean.
+- `gleam docs build` renders all 5 pages + API reference clean.
 
 ### Test files (current)
 
