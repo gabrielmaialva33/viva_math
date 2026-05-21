@@ -20,7 +20,7 @@
 
 import gleam/float
 import gleam/list
-import gleam_community/maths
+import viva_math/scalar
 import viva_math/vector.{type Vec3}
 
 /// Free Energy state for a system.
@@ -131,8 +131,8 @@ pub fn gaussian_kl_divergence_full(
 
       // 0.5 · d · (ln σ₂² - ln σ₁²) — separate logs for stability.
       let log_term = case
-        maths.natural_logarithm(prior_variance),
-        maths.natural_logarithm(posterior_variance)
+        scalar.try_ln(prior_variance),
+        scalar.try_ln(posterior_variance)
       {
         Ok(log_prior), Ok(log_posterior) ->
           0.5 *. d *. { log_prior -. log_posterior }
@@ -288,7 +288,7 @@ pub fn update_thresholds(
     *. { current.std_dev *. current.std_dev }
 
   // Convert variance back to std_dev (sqrt = nth_root with n=2)
-  let new_std = case maths.nth_root(new_var, 2) {
+  let new_std = case float.square_root(new_var) {
     Ok(s) -> s
     Error(_) -> current.std_dev
   }
@@ -415,7 +415,7 @@ pub fn variational_bound(
     True -> 100.0
     // Large surprise for impossible observations
     False ->
-      case maths.natural_logarithm(observation_likelihood) {
+      case scalar.try_ln(observation_likelihood) {
         Ok(log_l) -> 0.0 -. log_l
         Error(_) -> 100.0
       }
@@ -518,7 +518,7 @@ pub fn policy_posterior(
           }
         })
       let exps =
-        list.map(gs, fn(pair) { #(pair.0, maths.exponential(pair.1 -. max_g)) })
+        list.map(gs, fn(pair) { #(pair.0, scalar.exp(pair.1 -. max_g)) })
       let total = list.fold(exps, 0.0, fn(acc, pair) { acc +. pair.1 })
       case total == 0.0 {
         True -> list.map(gs, fn(pair) { #(pair.0, 0.0) })

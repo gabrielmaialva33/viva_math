@@ -7,7 +7,6 @@
 
 import gleam/float
 import gleam/list
-import gleam_community/maths
 import viva_math/common
 
 /// A 3-dimensional vector representing PAD emotional state.
@@ -94,7 +93,7 @@ pub fn length_squared(v: Vec3) -> Float {
 /// Length (magnitude) of a vector.
 pub fn length(v: Vec3) -> Float {
   let squared = length_squared(v)
-  case maths.nth_root(squared, 2) {
+  case float.square_root(squared) {
     Ok(result) -> result
     Error(_) -> 0.0
   }

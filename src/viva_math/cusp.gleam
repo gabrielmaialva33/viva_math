@@ -16,8 +16,9 @@
 
 import gleam/float
 import gleam/list
-import gleam_community/maths
 import viva_math/common
+import viva_math/constants
+import viva_math/scalar
 
 /// Cusp catastrophe parameters.
 /// - alpha: normal factor (bifurcation parameter)
@@ -167,7 +168,7 @@ pub fn volatility(x: Float, params: CuspParams) -> Float {
           let dist = float.absolute_value(x -. unstable)
           // Gaussian-like decay from unstable point
           let neg_dist_sq = 0.0 -. { dist *. dist }
-          maths.exponential(neg_dist_sq)
+          scalar.exp(neg_dist_sq)
         }
       }
     }
@@ -192,7 +193,7 @@ fn cardano_single_root(alpha: Float, beta: Float) -> Float {
   case d >=. 0.0 {
     True -> {
       // One real root
-      let sqrt_d = case maths.nth_root(d, 2) {
+      let sqrt_d = case float.square_root(d) {
         Ok(v) -> v
         Error(_) -> 0.0
       }
@@ -227,7 +228,7 @@ fn trigonometric_roots(alpha: Float, beta: Float) -> List(Float) {
       // m = 2 * sqrt(-p/3)
       let neg_p = 0.0 -. p
       let neg_p_over_3 = neg_p /. 3.0
-      let m = case maths.nth_root(neg_p_over_3, 2) {
+      let m = case float.square_root(neg_p_over_3) {
         Ok(v) -> 2.0 *. v
         Error(_) -> 0.0
       }
@@ -235,7 +236,7 @@ fn trigonometric_roots(alpha: Float, beta: Float) -> List(Float) {
       // cos_arg = (3q/2p) * sqrt(-3/p)
       // Simplified: cos_arg = (3q) / (2p * sqrt((-p/3)^3))
       let neg_p_cubed = neg_p_over_3 *. neg_p_over_3 *. neg_p_over_3
-      let cos_arg = case maths.nth_root(neg_p_cubed, 2) {
+      let cos_arg = case float.square_root(neg_p_cubed) {
         Ok(denom) -> {
           case denom == 0.0 {
             True -> 0.0
@@ -250,41 +251,25 @@ fn trigonometric_roots(alpha: Float, beta: Float) -> List(Float) {
         Error(_) -> 0.0
       }
 
-      // Clamp to [-1, 1] for acos
+      // Clamp to [-1, 1] for acos (BIF is safe within this domain).
       let cos_arg_clamped = common.clamp(cos_arg, -1.0, 1.0)
-      let theta = case maths.acos(cos_arg_clamped) {
-        Ok(v) -> v /. 3.0
-        Error(_) -> 0.0
-      }
+      let theta = scalar.acos(cos_arg_clamped) /. 3.0
 
-      let pi = maths.pi()
+      let pi = constants.pi
       let two_pi_over_3 = 2.0 *. pi /. 3.0
       let four_pi_over_3 = 4.0 *. pi /. 3.0
-      let r1 = m *. maths.cos(theta)
-      let r2 = m *. maths.cos(theta -. two_pi_over_3)
-      let r3 = m *. maths.cos(theta -. four_pi_over_3)
+      let r1 = m *. scalar.cos(theta)
+      let r2 = m *. scalar.cos(theta -. two_pi_over_3)
+      let r3 = m *. scalar.cos(theta -. four_pi_over_3)
 
       [r1, r2, r3]
     }
   }
 }
 
-// Internal: Cube root (handles negative numbers)
+// Internal: Cube root (handles negative numbers) — delegated to scalar.
 fn cbrt(x: Float) -> Float {
-  case x >=. 0.0 {
-    True ->
-      case maths.nth_root(x, 3) {
-        Ok(v) -> v
-        Error(_) -> 0.0
-      }
-    False -> {
-      let neg_x = 0.0 -. x
-      case maths.nth_root(neg_x, 3) {
-        Ok(v) -> 0.0 -. v
-        Error(_) -> 0.0
-      }
-    }
-  }
+  scalar.cbrt(x)
 }
 
 // Internal: Sort three floats

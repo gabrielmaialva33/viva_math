@@ -1,11 +1,11 @@
 //// Common mathematical utilities for VIVA.
 ////
-//// Functions not found in gleam_community_maths:
-//// - clamp, lerp, sigmoid, softmax, safe_div
+//// Self-contained: depends only on stdlib + sibling viva_math modules.
 
 import gleam/float
 import gleam/list
-import gleam_community/maths
+import viva_math/constants
+import viva_math/scalar
 
 /// Clamp a value to a range [min, max].
 ///
@@ -96,7 +96,7 @@ pub fn inverse_lerp(a: Float, b: Float, value: Float) -> Result(Float, Nil) {
 /// ```
 pub fn sigmoid(x: Float, k: Float) -> Float {
   let neg_kx = 0.0 -. { k *. x }
-  1.0 /. { 1.0 +. maths.exponential(neg_kx) }
+  1.0 /. { 1.0 +. scalar.exp(neg_kx) }
 }
 
 /// Standard sigmoid with k=1.
@@ -123,7 +123,7 @@ pub fn softmax(values: List(Float)) -> Result(List(Float), Nil) {
       let max_val = list.fold(values, 0.0, float.max)
 
       // Compute exp(x - max) for stability
-      let exps = list.map(values, fn(x) { maths.exponential(x -. max_val) })
+      let exps = list.map(values, fn(x) { scalar.exp(x -. max_val) })
 
       // Sum of exponentials
       let sum = list.fold(exps, 0.0, fn(acc, x) { acc +. x })
@@ -176,15 +176,15 @@ pub fn smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
 /// ```
 pub fn exponential_decay(value: Float, rate: Float, time: Float) -> Float {
   let neg_rt = 0.0 -. { rate *. time }
-  value *. maths.exponential(neg_rt)
+  value *. scalar.exp(neg_rt)
 }
 
-/// Re-export useful constants from gleam_community_maths
-pub const pi = maths.pi
+/// Re-export useful constants from viva_math/constants
+pub const pi = constants.pi
 
-pub const e = maths.e
+pub const e = constants.e
 
-pub const tau = maths.tau
+pub const tau = constants.tau
 
 // ============================================================================
 // STOCHASTIC UTILITIES (Pattern from viva_glyph/codebook.gleam)
@@ -224,7 +224,7 @@ pub fn deterministic_noise(step: Int, seed: Int) -> Float {
 /// ```
 pub fn wiener_increment(step: Int, seed: Int, dt: Float) -> Float {
   let noise = deterministic_noise(step, seed)
-  case maths.nth_root(dt, 2) {
+  case float.square_root(dt) {
     Ok(sqrt_dt) -> noise *. sqrt_dt
     Error(_) -> 0.0
   }
@@ -247,7 +247,7 @@ pub fn inverse_sqrt_decay(base_rate: Float, t: Float, tau: Float) -> Float {
   case tau <=. 0.0 {
     True -> base_rate
     False -> {
-      case maths.nth_root(1.0 +. t /. tau, 2) {
+      case float.square_root(1.0 +. t /. tau) {
         Ok(sqrt_val) -> base_rate /. sqrt_val
         Error(_) -> base_rate
       }

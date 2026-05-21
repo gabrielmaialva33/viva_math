@@ -19,7 +19,7 @@
 
 import gleam/float
 import gleam/list
-import gleam_community/maths
+import viva_math/scalar
 import viva_math/vector.{type Vec3, Vec3}
 
 /// An attractor in PAD space with a name and position.
@@ -118,7 +118,7 @@ pub fn basin_weights(
       // Softmax: exp(-γd - max) / sum
       let exps =
         list.map(neg_gamma_distances, fn(pair) {
-          #(pair.0, maths.exponential(pair.1 -. max_val))
+          #(pair.0, scalar.exp(pair.1 -. max_val))
         })
       let sum = list.fold(exps, 0.0, fn(acc, pair) { acc +. pair.1 })
 
