@@ -7,8 +7,9 @@
 [![Erlang+JS](https://img.shields.io/badge/Erlang_%2B_JS-4B275F?style=for-the-badge)](https://gleam.run/news/multi-target-compilation/)
 [![Hex](https://img.shields.io/badge/hex.pm-viva__math-A678DD?style=for-the-badge&logo=hex&logoColor=white)](https://hex.pm/packages/viva_math)
 [![PAD](https://img.shields.io/badge/PAD-Mehrabian_1996-7C3AED?style=for-the-badge)](https://en.wikipedia.org/wiki/PAD_emotional_state_model)
-[![Tests](https://img.shields.io/badge/tests-333_passing-00875A?style=for-the-badge)](./test)
+[![Tests](https://img.shields.io/badge/tests-510_passing-00875A?style=for-the-badge)](./test)
 [![Version](https://img.shields.io/badge/version-1.2.102-CD5C5C?style=for-the-badge)](./CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/docs-hexdocs-7C3AED?style=for-the-badge)](https://hexdocs.pm/viva_math)
 [![License](https://img.shields.io/badge/license-MIT-228B22?style=for-the-badge)](./LICENSE)
 
 ---
@@ -47,7 +48,7 @@ Thom 1972, Friston 2010, Shannon 1948).
 | **Language**   | Pure Gleam (type-safe functional)                                                                                 |
 | **Target**     | Erlang (BEAM)                                                                                                     |
 | **Runtime deps** | `gleam_stdlib` only                                                                                             |
-| **Tests**      | 333 passing                                                                                                       |
+| **Tests**      | 510 passing                                                                                                       |
 | **Domain**     | Affective computing, dynamical systems, info theory, optimal transport                                            |
 | **Public API** | `viva_math/{scalar,common,vector,cusp,free_energy,attractor,entropy,ou,transport,ode,statistics,distributions,…}` |
 
@@ -63,6 +64,9 @@ gleam add viva_math
 import viva_math/attractor
 import viva_math/cusp
 import viva_math/free_energy
+import viva_math/ou
+import viva_math/random
+import viva_math/transport
 import viva_math/vector
 
 pub fn main() {
@@ -70,18 +74,29 @@ pub fn main() {
   let state = vector.pad(-0.3, 0.7, -0.2)
 
   // Nearest discrete emotion
-  let emotion = attractor.classify_emotion(state)
+  let _ = attractor.classify_emotion(state)
   // -> "fear"
 
-  // Bistability check (sudden mood shift possible?)
-  let params = cusp.from_arousal_dominance(0.7, -0.2)
-  let volatile = cusp.is_bistable(params)
+  // Bistability check — sudden mood transition possible?
+  let cusp_params = cusp.from_arousal_dominance(0.7, -0.2)
+  let _ = cusp.is_bistable(cusp_params)
   // -> True
 
-  // Prediction error vs expected state
-  let expected = vector.pad(0.0, 0.0, 0.0)
-  let fe = free_energy.compute_state(expected, state, expected, 0.1)
-  // fe.feeling -> Surprised | Alarmed
+  // Free energy (prediction error vs baseline).
+  let baseline = vector.pad(0.0, 0.0, 0.0)
+  let fe = free_energy.compute_state_simple(baseline, state, baseline, 0.1)
+  // fe.feeling -> Alarmed | Overwhelmed
+
+  // Ornstein-Uhlenbeck mood dynamics — mean-reverting noise.
+  let ou_params = ou.OUParams1D(theta: 1.0, mu: 0.5, sigma: 0.2)
+  let seed = random.from_int(42)
+  let #(trajectory, _) = ou.simulate(ou_params, 0.0, 0.01, 1000, seed)
+  // trajectory: List(Float) of length 1000
+
+  // Wasserstein distance between two populations.
+  let assert Ok(w2) =
+    transport.wasserstein_2_empirical([0.0, 0.5, 1.0], [0.2, 0.4, 0.8])
+  // w2 ≈ 0.158
 }
 ```
 
@@ -273,6 +288,20 @@ let r = entropy.renyi([0.2, 0.3, 0.5], alpha: 2.0)
 
 ---
 
+## 📚 Guides
+
+Conceptual guides published alongside the API reference on
+[hexdocs.pm/viva_math](https://hexdocs.pm/viva_math):
+
+| Guide | Topic |
+|---|---|
+| [PAD Emotional Model](./docs/pad-model.md) | The `Vec3` type, 8 basic emotion attractors, Mehrabian (1996) |
+| [Ornstein-Uhlenbeck Mood Dynamics](./docs/ou-dynamics.md) | Doob exact kernel, closed-form moments, Vec3 PAD dynamics |
+| [Wasserstein Distance](./docs/wasserstein.md) | 1D empirical W₁/W₂, Gaussian closed form, sliced PAD pseudo-metric |
+| [Numerical Accuracy](./docs/numerical-accuracy.md) | Tolerance regimes, cancellation defences, measured precision per function |
+
+---
+
 ## 🗺️ Roadmap
 
 | Phase                                                | Status |
@@ -284,11 +313,13 @@ let r = entropy.renyi([0.2, 0.3, 0.5], alpha: 2.0)
 | Shannon / KL / Jensen-Shannon / Rényi entropy        |   ✅    |
 | Hybrid affective entropy                             |   ✅    |
 | Arousal-weighted KL sensitivity                      |   ✅    |
-| Multi-target build (Erlang + JS)                     |   ✅    |
-| Ornstein-Uhlenbeck mood dynamics                     |   ⏳    |
-| Variational Free Energy (deeper Bayesian model)      |   ⏳    |
-| Wasserstein distance between affective distributions |   ⏳    |
-| Property-based tests on every closed form            |   ⏳    |
+| Ornstein-Uhlenbeck mood dynamics                     |   ✅    |
+| Variational Free Energy (deeper Bayesian model)      |   ✅    |
+| Wasserstein distance between affective distributions |   ✅    |
+| Property-based tests on every closed form            |   ✅    |
+| Multivariate Wasserstein (true W₂ vs sliced)         |   ⏳    |
+| ULP-by-ULP `mpmath` reference validation             |   ⏳    |
+| JavaScript target (requires FFI rework)              |   ⏳    |
 
 ---
 
@@ -296,7 +327,7 @@ let r = entropy.renyi([0.2, 0.3, 0.5], alpha: 2.0)
 
 ```bash
 git checkout -b feature/your-feature
-gleam test                  # 333 tests
+gleam test                  # 510 tests
 gleam format --check src test
 gleam docs build
 ```
