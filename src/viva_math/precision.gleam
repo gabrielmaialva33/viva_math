@@ -372,3 +372,26 @@ pub fn cmp_abs_desc(a: Float, b: Float) -> order.Order {
     _, _ -> order.Eq
   }
 }
+
+// ============================================================================
+// Closeness predicates
+// ============================================================================
+
+/// `True` when `|a − b| ≤ atol + rtol · |b|`. Matches NumPy's `isclose`.
+///
+/// Use `rtol = 1.0e-5`, `atol = 1.0e-8` for the NumPy defaults. For exact
+/// float equality up to the last bit, pass `rtol = 0.0, atol = 0.0`.
+pub fn is_close(a: Float, b: Float, rtol: Float, atol: Float) -> Bool {
+  float.absolute_value(a -. b) <=. atol +. rtol *. float.absolute_value(b)
+}
+
+/// `True` when every paired `(a, b)` in `pairs` satisfies `is_close`.
+///
+/// Empty input is vacuously close (`True`), matching NumPy.
+pub fn all_close(
+  pairs: List(#(Float, Float)),
+  rtol: Float,
+  atol: Float,
+) -> Bool {
+  list.all(pairs, fn(p) { is_close(p.0, p.1, rtol, atol) })
+}
