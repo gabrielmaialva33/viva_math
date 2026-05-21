@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.100] - 2026-05-20
+## [1.2.101] - 2026-05-21
+
+Self-contained release. The library no longer depends on
+`gleam_community_maths`. All transcendental, trigonometric and root
+operations previously delegated to that package are now provided by
+`viva_math/scalar` via Erlang `:math` BIFs (no runtime overhead).
+
+### Added — `viva_math/scalar`
+
+- Trigonometry BIFs: `sin`, `cos`, `tan`, `asin`, `acos`, `atan2`.
+  `atan` was promoted from private to public.
+- Logarithms BIFs: `log2`, `log10` (the natural `ln` was already public).
+- `cbrt` — real cube root defined for all `Float` via the sign trick.
+- Result-wrapped, domain-safe variants for chaining without crashes:
+  `try_ln`, `try_log2`, `try_log10`, `try_sqrt`, `try_cbrt`,
+  `try_nth_root(x, n)` (handles odd/even `n`, errors for `n ≤ 0`).
+
+### Changed
+
+- **Dependency drop**: `gleam_community_maths` removed from `gleam.toml`.
+  Only `gleam_stdlib` remains as a runtime dependency.
+- `viva_math/common` — `maths.exponential` → `scalar.exp`;
+  re-exported constants (`pi`, `e`, `tau`) now sourced from
+  `viva_math/constants`; `nth_root(_, 2)` → `gleam/float.square_root`.
+- `viva_math/attractor` — `maths.exponential` → `scalar.exp`.
+- `viva_math/cusp` — `maths.acos`/`cos`/`pi` → `scalar.acos`/`cos` +
+  `constants.pi`; the internal `cbrt` helper now delegates to
+  `scalar.cbrt`; all `nth_root(_, 2)` → `float.square_root`.
+- `viva_math/vector` — `nth_root(_, 2)` → `float.square_root`.
+- `viva_math/entropy` — `logarithm_2` → `scalar.try_log2`;
+  `natural_logarithm` → `scalar.try_ln`; `exponential` → `scalar.exp`.
+- `viva_math/free_energy` — `natural_logarithm` → `scalar.try_ln`;
+  `exponential` → `scalar.exp`; `nth_root(_, 2)` → `float.square_root`.
+- `viva_math.gleam` `version` constant bumped to `"1.2.101"`.
+
+### Validated
+
+- 280 tests passing (no behaviour change, only routing).
+
+## [1.2.100] - 2026-05-21
 
 Scientific computing milestone. The library grew from 7 to 22 modules with
 compensated summation, autodiff (forward and reverse), symplectic
@@ -285,7 +324,9 @@ coding aligned with 2025-2026 papers.
 - Oravecz et al. (2009) "O-U Process in Affective Dynamics"
 - Shannon (1948) "A Mathematical Theory of Communication"
 
-[Unreleased]: https://github.com/gabrielmaialva33/viva_math/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/gabrielmaialva33/viva_math/compare/v1.2.101...HEAD
+[1.2.101]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.101
+[1.2.100]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.100
 [1.2.0]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.2.0
 [1.1.0]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.1.0
 [1.0.0]: https://github.com/gabrielmaialva33/viva_math/releases/tag/v1.0.0
