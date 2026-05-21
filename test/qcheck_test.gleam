@@ -8,10 +8,15 @@ import gleam/float
 import gleam/list
 import gleeunit/should
 import qcheck
+import viva_math/common
 import viva_math/complex
+import viva_math/entropy
+import viva_math/free_energy
+import viva_math/ou
 import viva_math/precision
 import viva_math/quaternion
 import viva_math/scalar
+import viva_math/transport
 import viva_math/vector
 
 fn close(a: Float, b: Float, tol: Float) -> Bool {
@@ -238,4 +243,227 @@ pub fn qcheck_moments_combine_associativity_test() {
       should.be_true(close(v_combined, v_direct, 1.0e-6))
     }
   }
+}
+
+// ============================================================================
+// closed forms: additional invariants
+// ============================================================================
+
+pub fn property_clamp_idempotent_test() {
+  use t <- qcheck.given(qcheck.tuple4(
+    qcheck.bounded_float(-100.0, 100.0),
+    qcheck.bounded_float(-100.0, 100.0),
+    qcheck.bounded_float(0.0, 100.0),
+    qcheck.bounded_float(0.0, 1.0),
+  ))
+  let #(x, lo, width, _) = t
+  let hi = lo +. width
+  let once = common.clamp(x, lo, hi)
+  let twice = common.clamp(once, lo, hi)
+  should.be_true(twice == once)
+}
+
+pub fn property_sigmoid_in_unit_interval_test() {
+  use x <- qcheck.given(qcheck.bounded_float(-100.0, 100.0))
+  let y = scalar.sigmoid(x)
+  should.be_true(y >=. 0.0 && y <=. 1.0)
+}
+
+pub fn property_sin_cos_identity_test() {
+  use x <- qcheck.given(qcheck.bounded_float(-100.0, 100.0))
+  let s = scalar.sin(x)
+  let c = scalar.cos(x)
+  should.be_true(close(s *. s +. c *. c, 1.0, 1.0e-9))
+}
+
+pub fn property_softmax_sums_to_one_test() {
+  use t <- qcheck.given(qcheck.tuple4(
+    qcheck.bounded_float(-100.0, 100.0),
+    qcheck.bounded_float(-100.0, 100.0),
+    qcheck.bounded_float(-100.0, 100.0),
+    qcheck.bounded_float(-100.0, 100.0),
+  ))
+  let #(a, b, c, d) = t
+  case common.softmax([a, b, c, d]) {
+    Ok(probs) -> {
+      let sum = list.fold(probs, 0.0, fn(acc, x) { acc +. x })
+      should.be_true(close(sum, 1.0, 1.0e-12))
+    }
+    Error(_) -> should.be_true(False)
+  }
+}
+
+pub fn property_js_symmetric_test() {
+  use t <- qcheck.given(qcheck.tuple4(
+    qcheck.bounded_float(0.01, 100.0),
+    qcheck.bounded_float(0.01, 100.0),
+    qcheck.bounded_float(0.01, 100.0),
+    qcheck.bounded_float(0.01, 100.0),
+  ))
+  let #(a, b, c, d) = t
+  let p_total = a +. b
+  let q_total = c +. d
+  let p = [a /. p_total, b /. p_total]
+  let q = [c /. q_total, d /. q_total]
+
+  case entropy.jensen_shannon(p, q), entropy.jensen_shannon(q, p) {
+    Ok(left), Ok(right) -> should.be_true(close(left, right, 1.0e-12))
+    _, _ -> should.be_true(False)
+  }
+}
+
+pub fn property_kl_self_zero_test() {
+  use pair <- qcheck.given(qcheck.tuple2(
+    qcheck.bounded_float(0.01, 100.0),
+    qcheck.bounded_float(0.01, 100.0),
+  ))
+  let #(a, b) = pair
+  let total = a +. b
+  let p = [a /. total, b /. total]
+
+  case entropy.kl_divergence(p, p) {
+    Ok(kl) -> should.be_true(close(kl, 0.0, 1.0e-12))
+    Error(_) -> should.be_true(False)
+  }
+}
+
+pub fn property_shannon_nonneg_test() {
+  use pair <- qcheck.given(qcheck.tuple2(
+    qcheck.bounded_float(0.01, 100.0),
+    qcheck.bounded_float(0.01, 100.0),
+  ))
+  let #(a, b) = pair
+  let total = a +. b
+  let probs = [a /. total, b /. total]
+  should.be_true(entropy.shannon(probs) >=. 0.0)
+}
+
+pub fn property_erf_odd_test() {
+  use x <- qcheck.given(qcheck.bounded_float(-10.0, 10.0))
+  should.be_true(close(scalar.erf(0.0 -. x), 0.0 -. scalar.erf(x), 1.0e-12))
+}
+
+pub fn property_activations_zero_at_zero_test() {
+  should.be_true(close(scalar.gelu(0.0), 0.0, 1.0e-12))
+  should.be_true(close(scalar.silu(0.0), 0.0, 1.0e-12))
+}
+
+// ============================================================================
+// OU dynamics — closed-form invariants
+// ============================================================================
+
+// mean_at(t=0) = x_0 for any valid params.
+pub fn property_ou_mean_at_zero_is_x0_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(0.01, 5.0),
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(-2.0, 2.0),
+  ))
+  let #(theta, mu, x0) = t
+  let params = ou.OUParams1D(theta: theta, mu: mu, sigma: 0.5)
+  should.be_true(close(ou.mean_at(params, x0, 0.0), x0, 1.0e-12))
+}
+
+// stationary_variance ≥ 0.
+pub fn property_ou_stationary_variance_nonneg_test() {
+  use t <- qcheck.given(qcheck.tuple2(
+    qcheck.bounded_float(0.01, 5.0),
+    qcheck.bounded_float(0.0, 2.0),
+  ))
+  let #(theta, sigma) = t
+  let params = ou.OUParams1D(theta: theta, mu: 0.0, sigma: sigma)
+  should.be_true(ou.stationary_variance(params) >=. 0.0)
+}
+
+// autocovariance(0) = stationary_variance.
+pub fn property_ou_autocov_zero_equals_stationary_test() {
+  use t <- qcheck.given(qcheck.tuple2(
+    qcheck.bounded_float(0.01, 5.0),
+    qcheck.bounded_float(0.01, 2.0),
+  ))
+  let #(theta, sigma) = t
+  let params = ou.OUParams1D(theta: theta, mu: 0.0, sigma: sigma)
+  let v = ou.stationary_variance(params)
+  let c = ou.autocovariance(params, 0.0)
+  should.be_true(close(v, c, 1.0e-12))
+}
+
+// |mean_at(t) − μ| ≤ |x0 − μ| (monotonic mean reversion).
+pub fn property_ou_mean_reverts_monotonically_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(0.01, 5.0),
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(0.0, 10.0),
+  ))
+  let #(theta, x0, t_val) = t
+  let mu = 0.5
+  let params = ou.OUParams1D(theta: theta, mu: mu, sigma: 0.1)
+  let m = ou.mean_at(params, x0, t_val)
+  let initial_gap = float.absolute_value(x0 -. mu)
+  let current_gap = float.absolute_value(m -. mu)
+  should.be_true(current_gap <=. initial_gap +. 1.0e-9)
+}
+
+// ============================================================================
+// Variational FE — ELBO bound + KL non-negativity
+// ============================================================================
+
+// scalar_gaussian_kl ≥ 0.
+pub fn property_scalar_gaussian_kl_nonneg_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(0.1, 5.0),
+  ))
+  let #(mu_q, mu_p, var_common) = t
+  let kl = free_energy.scalar_gaussian_kl(mu_q, var_common, mu_p, var_common)
+  should.be_true(kl >=. 0.0 -. 1.0e-12)
+}
+
+// ELBO ≤ log p(x) (variational bound — Jensen's inequality).
+pub fn property_elbo_bound_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(0.2, 3.0),
+  ))
+  let #(obs, q_mean, q_var) = t
+  let prior_mean = 0.0
+  let prior_var = 1.0
+  let lik_var = 1.0
+  let e = free_energy.elbo(obs, q_mean, q_var, prior_mean, prior_var, lik_var)
+  let logp =
+    free_energy.log_evidence_gaussian(obs, prior_mean, prior_var, lik_var)
+  // Floating point slack: bound deve valer com tolerância pequena.
+  should.be_true(e.total <=. logp +. 1.0e-9)
+}
+
+// ============================================================================
+// Wasserstein — symmetry + self-zero
+// ============================================================================
+
+pub fn property_wasserstein_self_zero_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(-5.0, 5.0),
+    qcheck.bounded_float(-5.0, 5.0),
+    qcheck.bounded_float(-5.0, 5.0),
+  ))
+  let #(a, b, c) = t
+  let xs = [a, b, c]
+  let assert Ok(d) = transport.wasserstein_1_empirical(xs, xs)
+  should.be_true(close(d, 0.0, 1.0e-9))
+}
+
+pub fn property_wasserstein_symmetric_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(-3.0, 3.0),
+    qcheck.bounded_float(-3.0, 3.0),
+    qcheck.bounded_float(-3.0, 3.0),
+  ))
+  let #(a, b, c) = t
+  let p = [a, b]
+  let q = [b, c]
+  let assert Ok(d_pq) = transport.wasserstein_1_empirical(p, q)
+  let assert Ok(d_qp) = transport.wasserstein_1_empirical(q, p)
+  should.be_true(close(d_pq, d_qp, 1.0e-12))
 }
