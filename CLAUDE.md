@@ -33,8 +33,8 @@ gleam test -- --filter cusp                # run any test matching "cusp"
 ### Benchmarks (not regular tests)
 
 ```bash
-gleam run -m bench_ode          # ODE solver accuracy/cost comparison
-gleam run -m bench_precision    # numerical precision audit
+gleam run -m viva_math/bench_ode          # ODE solver accuracy/cost comparison
+gleam run -m viva_math/bench_precision    # numerical precision audit
 ```
 
 ### Examples convention
