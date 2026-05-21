@@ -58,7 +58,11 @@ pub type NodeId =
 
 /// What kind of operation produced this node. Public because it appears in
 /// the body of `Node`, which is reachable from the public `Tape`.
-pub type Op {
+/// Algebraic operation recorded on each tape node. Opaque — callers should
+/// build expressions via the high-level forward operations (`add`, `mul`, …)
+/// and consume gradients via `backward` + `grad_of`. Direct construction
+/// of `Op` values would let callers fabricate inconsistent tapes.
+pub opaque type Op {
   Input
   Add(NodeId, NodeId)
   Sub(NodeId, NodeId)
@@ -76,12 +80,16 @@ pub type Op {
 }
 
 /// One node on the tape. Public for tape introspection.
-pub type Node {
+/// Single tape node — pairs a forward value with the `Op` that produced it.
+/// Opaque (the integrity of the tape depends on this not being constructed
+/// outside the module).
+pub opaque type Node {
   Node(value: Float, op: Op)
 }
 
 /// Computation tape — append-only graph of forward computations.
-pub type Tape {
+/// Opaque (callers should treat it as a token threaded through forward ops).
+pub opaque type Tape {
   Tape(nodes: Dict(NodeId, Node), next_id: Int)
 }
 
