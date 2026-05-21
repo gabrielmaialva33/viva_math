@@ -28,6 +28,12 @@ jobs:
       - name: Download dependencies
         run: gleam deps download
 
+      - name: Verify formatting
+        run: gleam format --check src test
+
+      - name: Run tests
+        run: gleam test
+
       - name: Publish to Hex
         if: ${{ env.HEX_API_KEY != '' }}
         env:
