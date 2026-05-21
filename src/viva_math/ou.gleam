@@ -231,7 +231,7 @@ pub fn autocovariance(params: OUParams1D, lag: Float) -> Float {
 ///
 /// Time at which `E[X_t]` has covered half the gap toward `μ`.
 pub fn half_life(params: OUParams1D) -> Float {
-  case scalar.try_ln(2.0) {
+  case scalar.logarithm(2.0) {
     Ok(l) -> l /. params.theta
     Error(_) -> 0.0
   }

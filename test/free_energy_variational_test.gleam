@@ -94,7 +94,7 @@ pub fn vfe_log_evidence_gaussian_known_test() {
   let expected =
     0.0
     -. 0.5
-    *. case scalar.try_ln(4.0 *. constants.pi) {
+    *. case scalar.logarithm(4.0 *. constants.pi) {
       Ok(l) -> l
       Error(_) -> 0.0
     }

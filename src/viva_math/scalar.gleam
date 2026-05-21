@@ -130,11 +130,18 @@ pub fn log2(x: Float) -> Float
 pub fn log10(x: Float) -> Float
 
 // ============================================================================
-// Result-wrapped variants (domain-safe)
+// Result-wrapped variants (domain-safe) — names aligned with `gleam/float`
 // ============================================================================
+//
+// The idiomatic Gleam style (cf. `float.square_root`, `float.logarithm`,
+// `float.divide`) is to name the Result-returning function after the
+// mathematical operation itself and rely on the type to communicate failure
+// — `try` is reserved for the `result.try` combinator. We expose both the
+// idiomatic names (`logarithm`, `square_root`, …) and the legacy `try_*`
+// aliases marked `@deprecated`, so callers can migrate at their pace.
 
 /// Natural logarithm with domain check. Returns `Error(Nil)` for `x ≤ 0`.
-pub fn try_ln(x: Float) -> Result(Float, Nil) {
+pub fn logarithm(x: Float) -> Result(Float, Nil) {
   case x <=. 0.0 {
     True -> Error(Nil)
     False -> Ok(ln(x))
@@ -142,7 +149,7 @@ pub fn try_ln(x: Float) -> Result(Float, Nil) {
 }
 
 /// Log base 2 with domain check. Returns `Error(Nil)` for `x ≤ 0`.
-pub fn try_log2(x: Float) -> Result(Float, Nil) {
+pub fn logarithm_2(x: Float) -> Result(Float, Nil) {
   case x <=. 0.0 {
     True -> Error(Nil)
     False -> Ok(log2(x))
@@ -150,7 +157,7 @@ pub fn try_log2(x: Float) -> Result(Float, Nil) {
 }
 
 /// Log base 10 with domain check. Returns `Error(Nil)` for `x ≤ 0`.
-pub fn try_log10(x: Float) -> Result(Float, Nil) {
+pub fn logarithm_10(x: Float) -> Result(Float, Nil) {
   case x <=. 0.0 {
     True -> Error(Nil)
     False -> Ok(log10(x))
@@ -158,11 +165,37 @@ pub fn try_log10(x: Float) -> Result(Float, Nil) {
 }
 
 /// Square root with domain check. Returns `Error(Nil)` for `x < 0`.
-pub fn try_sqrt(x: Float) -> Result(Float, Nil) {
+pub fn square_root(x: Float) -> Result(Float, Nil) {
   case x <. 0.0 {
     True -> Error(Nil)
     False -> Ok(sqrt(x))
   }
+}
+
+// ---- Legacy `try_*` aliases — deprecated ----
+
+/// Deprecated alias for `logarithm`.
+@deprecated("Use `scalar.logarithm` instead.")
+pub fn try_ln(x: Float) -> Result(Float, Nil) {
+  logarithm(x)
+}
+
+/// Deprecated alias for `logarithm_2`.
+@deprecated("Use `scalar.logarithm_2` instead.")
+pub fn try_log2(x: Float) -> Result(Float, Nil) {
+  logarithm_2(x)
+}
+
+/// Deprecated alias for `logarithm_10`.
+@deprecated("Use `scalar.logarithm_10` instead.")
+pub fn try_log10(x: Float) -> Result(Float, Nil) {
+  logarithm_10(x)
+}
+
+/// Deprecated alias for `square_root`.
+@deprecated("Use `scalar.square_root` instead.")
+pub fn try_sqrt(x: Float) -> Result(Float, Nil) {
+  square_root(x)
 }
 
 /// Real cube root, defined for all `x` via `sign(x) · |x|^(1/3)`.
@@ -174,24 +207,24 @@ pub fn cbrt(x: Float) -> Float {
   }
 }
 
-/// Real cube root with `Result` API for parity with `try_sqrt`.
+/// Real cube root with `Result` API for parity with `square_root`.
 /// Total over `Float`, so `Ok` always; kept for ergonomic chaining.
-pub fn try_cbrt(x: Float) -> Result(Float, Nil) {
+pub fn cube_root(x: Float) -> Result(Float, Nil) {
   Ok(cbrt(x))
 }
 
 /// Generalised real `n`-th root (`x^(1/n)`) for integer `n ≥ 1`.
 ///
 /// - `n = 1` → returns `Ok(x)`.
-/// - `n = 2` → uses `sqrt` (errors for `x < 0`).
+/// - `n = 2` → uses `square_root` (errors for `x < 0`).
 /// - Odd `n` → defined for all real `x` (sign trick).
 /// - Even `n > 2` → errors for `x < 0`; uses `pow(x, 1/n)` otherwise.
 /// - `n ≤ 0` → `Error(Nil)`.
-pub fn try_nth_root(x: Float, n: Int) -> Result(Float, Nil) {
+pub fn nth_root(x: Float, n: Int) -> Result(Float, Nil) {
   case n {
     n if n <= 0 -> Error(Nil)
     1 -> Ok(x)
-    2 -> try_sqrt(x)
+    2 -> square_root(x)
     n -> {
       let is_odd = n % 2 != 0
       case x <. 0.0, is_odd {
@@ -201,6 +234,20 @@ pub fn try_nth_root(x: Float, n: Int) -> Result(Float, Nil) {
       }
     }
   }
+}
+
+// ---- Legacy aliases — deprecated ----
+
+/// Deprecated alias for `cube_root`.
+@deprecated("Use `scalar.cube_root` instead.")
+pub fn try_cbrt(x: Float) -> Result(Float, Nil) {
+  cube_root(x)
+}
+
+/// Deprecated alias for `nth_root`.
+@deprecated("Use `scalar.nth_root` instead.")
+pub fn try_nth_root(x: Float, n: Int) -> Result(Float, Nil) {
+  nth_root(x, n)
 }
 
 @external(erlang, "erlang", "float")

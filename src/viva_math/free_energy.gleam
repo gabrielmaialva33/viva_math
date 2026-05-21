@@ -134,8 +134,8 @@ pub fn gaussian_kl_divergence_full(
 
       // 0.5 · d · (ln σ₂² - ln σ₁²) — separate logs for stability.
       let log_term = case
-        scalar.try_ln(prior_variance),
-        scalar.try_ln(posterior_variance)
+        scalar.logarithm(prior_variance),
+        scalar.logarithm(posterior_variance)
       {
         Ok(log_prior), Ok(log_posterior) ->
           0.5 *. d *. { log_prior -. log_posterior }
@@ -418,7 +418,7 @@ pub fn variational_bound(
     True -> 100.0
     // Large surprise for impossible observations
     False ->
-      case scalar.try_ln(observation_likelihood) {
+      case scalar.logarithm(observation_likelihood) {
         Ok(log_l) -> 0.0 -. log_l
         Error(_) -> 100.0
       }
@@ -856,7 +856,7 @@ pub fn elbo(
     False -> {
       let kl = scalar_gaussian_kl(q_mean, q_var, prior_mean, prior_var)
       let log_2pi_var =
-        scalar.try_ln(2.0 *. constants.pi *. likelihood_var)
+        scalar.logarithm(2.0 *. constants.pi *. likelihood_var)
         |> result.unwrap(0.0)
       let err2 = { observation -. q_mean } *. { observation -. q_mean }
       let term = { err2 +. q_var } /. { 2.0 *. likelihood_var }
@@ -881,7 +881,7 @@ pub fn scalar_gaussian_kl(
   case q_var <=. 0.0 || p_var <=. 0.0 {
     True -> 0.0
     False -> {
-      let log_term = case scalar.try_ln(p_var), scalar.try_ln(q_var) {
+      let log_term = case scalar.logarithm(p_var), scalar.logarithm(q_var) {
         Ok(lp), Ok(lq) -> lp -. lq
         _, _ -> 0.0
       }
@@ -1029,7 +1029,7 @@ pub fn log_evidence_gaussian(
       let marginal_var = prior_var +. likelihood_var
       let err = observation -. prior_mean
       let log_2pi_var =
-        scalar.try_ln(2.0 *. constants.pi *. marginal_var)
+        scalar.logarithm(2.0 *. constants.pi *. marginal_var)
         |> result.unwrap(0.0)
       0.0 -. 0.5 *. log_2pi_var -. err *. err /. { 2.0 *. marginal_var }
     }

@@ -32,7 +32,7 @@ pub fn shannon(probabilities: List(Float)) -> Float {
       case p <=. 0.0 {
         True -> acc
         False ->
-          case scalar.try_log2(p) {
+          case scalar.logarithm_2(p) {
             Ok(log_p) -> [0.0 -. p *. log_p, ..acc]
             Error(_) -> acc
           }
@@ -50,7 +50,7 @@ pub fn shannon_normalized(probabilities: List(Float)) -> Float {
     True -> 0.0
     False -> {
       let h = shannon(probabilities)
-      case scalar.try_log2(int_to_float(n)) {
+      case scalar.logarithm_2(int_to_float(n)) {
         Ok(max_h) ->
           case max_h == 0.0 {
             True -> 0.0
@@ -87,7 +87,7 @@ pub fn kl_divergence(p: List(Float), q: List(Float)) -> Result(Float, Nil) {
                     True -> Error(Nil)
                     // Can't have q=0 when p>0
                     False ->
-                      case scalar.try_ln(pi /. qi) {
+                      case scalar.logarithm(pi /. qi) {
                         Ok(log_ratio) -> Ok(sum +. { pi *. log_ratio })
                         Error(_) -> Error(Nil)
                       }
@@ -186,7 +186,7 @@ pub fn cross_entropy(p: List(Float), q: List(Float)) -> Result(Float, Nil) {
                   case qi <=. 0.0 {
                     True -> Error(Nil)
                     False ->
-                      case scalar.try_ln(qi) {
+                      case scalar.logarithm(qi) {
                         Ok(log_q) -> Ok(sum -. { pi *. log_q })
                         Error(_) -> Error(Nil)
                       }
@@ -209,7 +209,7 @@ pub fn binary_cross_entropy(p: Float, q: Float) -> Result(Float, Nil) {
   let q_inv = 1.0 -. q_clamped
   let p_inv = 1.0 -. p
 
-  case scalar.try_ln(q_clamped), scalar.try_ln(q_inv) {
+  case scalar.logarithm(q_clamped), scalar.logarithm(q_inv) {
     Ok(log_q), Ok(log_q_inv) -> {
       let result = p *. log_q +. p_inv *. log_q_inv
       Ok(0.0 -. result)
@@ -434,7 +434,7 @@ pub fn renyi(probabilities: List(Float), alpha: Float) -> Result(Float, Nil) {
       case sum_p_alpha <=. 0.0 {
         True -> Error(Nil)
         False -> {
-          case scalar.try_log2(sum_p_alpha) {
+          case scalar.logarithm_2(sum_p_alpha) {
             Ok(log_sum) -> Ok(log_sum /. { 1.0 -. alpha })
             Error(_) -> Error(Nil)
           }
@@ -449,7 +449,7 @@ fn power(base: Float, exponent: Float) -> Float {
   case base <=. 0.0 {
     True -> 0.0
     False -> {
-      case scalar.try_ln(base) {
+      case scalar.logarithm(base) {
         Ok(ln_base) -> scalar.exp(exponent *. ln_base)
         Error(_) -> 0.0
       }
@@ -505,7 +505,7 @@ pub fn differential_entropy_gaussian(sigma: Float) -> Result(Float, Nil) {
     False -> {
       // 2πe ≈ 17.07946844534713
       let two_pi_e = 17.07946844534713
-      case scalar.try_ln(two_pi_e *. sigma *. sigma) {
+      case scalar.logarithm(two_pi_e *. sigma *. sigma) {
         Ok(ln_val) -> Ok(0.5 *. ln_val)
         Error(_) -> Error(Nil)
       }
