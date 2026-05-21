@@ -20,6 +20,8 @@
 
 import gleam/float
 import gleam/list
+import gleam/result
+import viva_math/constants
 import viva_math/scalar
 import viva_math/vector.{type Vec3}
 
@@ -788,4 +790,237 @@ fn int_to_float(n: Int) -> Float {
       int_to_float(half) *. 2.0 +. int_to_float(remainder)
     }
   }
+}
+
+// ============================================================================
+// Variational Inference — Bayesian deepening of the FEP
+// ============================================================================
+//
+// References:
+// - Beal (2003) "Variational Algorithms for Approximate Bayesian Inference"
+// - Bishop (2006) "Pattern Recognition and Machine Learning", ch. 10
+// - Friston (2010) "The free-energy principle"
+//
+// All closed forms below assume **conjugate Gaussian** models with known
+// variances. This is the standard textbook regime (Bishop §10.1, §10.7) and
+// suffices for affective inference where each PAD axis is treated as a scalar
+// latent under Gaussian assumptions.
+//
+
+/// Decomposition of the Evidence Lower Bound.
+///
+/// ```
+/// ELBO(q) = E_q[log p(x | z)] − D_KL(q(z) ‖ p(z))
+///         = reconstruction − kl_divergence
+/// ```
+///
+/// Maximizing ELBO is equivalent to minimizing the variational free energy:
+/// `F = −ELBO`.
+pub type ELBO {
+  ELBO(
+    /// Expected log-likelihood under q. Higher = better data fit.
+    reconstruction: Float,
+    /// Divergence of posterior approximation from prior.
+    kl_divergence: Float,
+    /// `reconstruction − kl_divergence`. Lower bound on `log p(x)`.
+    total: Float,
+  )
+}
+
+/// Mean-field Gaussian variational posterior `q(z) ~ N(q_mean, q_var)`.
+pub type MeanFieldParams {
+  MeanFieldParams(q_mean: Float, q_var: Float)
+}
+
+/// Closed-form ELBO for a Gaussian latent model:
+///
+/// - Prior:      `p(z)   = N(prior_mean, prior_var)`
+/// - Likelihood: `p(x|z) = N(z, likelihood_var)`
+/// - Posterior approx: `q(z) = N(q_mean, q_var)`
+///
+/// Reconstruction term (expected log-likelihood under q):
+///
+/// `E_q[log p(x|z)] = −½·log(2π·likelihood_var)
+///                   − ((x − q_mean)² + q_var) / (2·likelihood_var)`
+///
+/// KL term is `gaussian_kl_divergence_full(q_mean, q_var, prior_mean, prior_var)`.
+pub fn elbo(
+  observation: Float,
+  q_mean: Float,
+  q_var: Float,
+  prior_mean: Float,
+  prior_var: Float,
+  likelihood_var: Float,
+) -> ELBO {
+  let kl = scalar_gaussian_kl(q_mean, q_var, prior_mean, prior_var)
+  let recon = case likelihood_var <=. 0.0 {
+    True -> 0.0 -. large_penalty()
+    False -> {
+      let log_2pi_var =
+        scalar.try_ln(2.0 *. constants.pi *. likelihood_var)
+        |> result.unwrap(0.0)
+      let err2 = { observation -. q_mean } *. { observation -. q_mean }
+      let term = { err2 +. q_var } /. { 2.0 *. likelihood_var }
+      0.0 -. 0.5 *. log_2pi_var -. term
+    }
+  }
+  ELBO(reconstruction: recon, kl_divergence: kl, total: recon -. kl)
+}
+
+/// 1D Gaussian KL — `D_KL(N(μ₁, σ₁²) ‖ N(μ₂, σ₂²))`.
+///
+/// `= ½ · ( ln(σ₂² / σ₁²) + (σ₁² + (μ₁−μ₂)²) / σ₂² − 1 )`.
+///
+/// Returns `0.0` if either variance is non-positive. Public so callers can
+/// reuse it (the existing `gaussian_kl_divergence_*` functions are Vec3-only).
+pub fn scalar_gaussian_kl(
+  q_mean: Float,
+  q_var: Float,
+  p_mean: Float,
+  p_var: Float,
+) -> Float {
+  case q_var <=. 0.0 || p_var <=. 0.0 {
+    True -> 0.0
+    False -> {
+      let log_term = case scalar.try_ln(p_var), scalar.try_ln(q_var) {
+        Ok(lp), Ok(lq) -> lp -. lq
+        _, _ -> 0.0
+      }
+      let diff = q_mean -. p_mean
+      let frac = { q_var +. diff *. diff } /. p_var
+      0.5 *. { log_term +. frac -. 1.0 }
+    }
+  }
+}
+
+/// Mean-field update under a Gaussian prior and Gaussian likelihood with
+/// known variances. **Closed form** — no iteration needed (the model is
+/// conjugate). Bishop §2.3.3.
+///
+/// ```
+/// posterior_precision = prior_precision + n · likelihood_precision
+/// posterior_mean      = posterior_var · (prior_precision · prior_mean
+///                                      + likelihood_precision · sum_x)
+/// ```
+///
+/// Returns `Error(Nil)` if either variance is non-positive.
+pub fn mean_field_update(
+  observations: List(Float),
+  prior_mean: Float,
+  prior_var: Float,
+  likelihood_var: Float,
+) -> Result(MeanFieldParams, Nil) {
+  case prior_var >. 0.0 && likelihood_var >. 0.0 {
+    False -> Error(Nil)
+    True -> {
+      let n = int_to_float(list.length(observations))
+      let sum_x = list.fold(observations, 0.0, fn(acc, x) { acc +. x })
+      let prior_prec = 1.0 /. prior_var
+      let lik_prec = 1.0 /. likelihood_var
+      let post_prec = prior_prec +. n *. lik_prec
+      let post_var = 1.0 /. post_prec
+      let post_mean =
+        post_var *. { prior_prec *. prior_mean +. lik_prec *. sum_x }
+      Ok(MeanFieldParams(q_mean: post_mean, q_var: post_var))
+    }
+  }
+}
+
+/// Iterated mean-field — for non-conjugate models the update would be
+/// re-applied with refreshed likelihood statistics. Here, since the conjugate
+/// case is one-shot, this iterates over a *sequence* of observation batches,
+/// using each posterior as the next prior (sequential Bayes).
+///
+/// Returns the final `MeanFieldParams` after consuming all batches.
+pub fn mean_field_iterate(
+  batches: List(List(Float)),
+  prior: MeanFieldParams,
+  likelihood_var: Float,
+) -> Result(MeanFieldParams, Nil) {
+  case batches {
+    [] -> Ok(prior)
+    [batch, ..rest] ->
+      case mean_field_update(batch, prior.q_mean, prior.q_var, likelihood_var) {
+        Error(_) -> Error(Nil)
+        Ok(next) -> mean_field_iterate(rest, next, likelihood_var)
+      }
+  }
+}
+
+/// Laplace approximation: fit a Gaussian to the mode of a smooth
+/// log-posterior. The mean is the MAP estimate (found by gradient ascent),
+/// the variance is `−1 / f''(mode)` via central finite differences.
+///
+/// `log_posterior` should return `log p(z | x)` up to an additive constant
+/// (the normaliser cancels in the gradient).
+///
+/// - `step_size` — gradient step for finding the mode.
+/// - `n_steps`   — gradient iterations. Returns `Error(Nil)` if the second
+///   derivative at the mode is non-negative (no valid Gaussian fit).
+pub fn laplace_approximation(
+  log_posterior: fn(Float) -> Float,
+  initial_guess: Float,
+  step_size: Float,
+  n_steps: Int,
+) -> Result(MeanFieldParams, Nil) {
+  let h = 1.0e-4
+  let mode = laplace_ascent(log_posterior, initial_guess, step_size, n_steps, h)
+  // Second derivative via central differences:
+  //   f''(z) ≈ (f(z+h) − 2·f(z) + f(z−h)) / h²
+  let f_plus = log_posterior(mode +. h)
+  let f_zero = log_posterior(mode)
+  let f_minus = log_posterior(mode -. h)
+  let second = { f_plus -. 2.0 *. f_zero +. f_minus } /. { h *. h }
+  case second <. 0.0 {
+    False -> Error(Nil)
+    True -> {
+      let q_var = 0.0 -. 1.0 /. second
+      Ok(MeanFieldParams(q_mean: mode, q_var: q_var))
+    }
+  }
+}
+
+fn laplace_ascent(
+  f: fn(Float) -> Float,
+  z: Float,
+  step: Float,
+  n: Int,
+  h: Float,
+) -> Float {
+  case n <= 0 {
+    True -> z
+    False -> {
+      let grad = { f(z +. h) -. f(z -. h) } /. { 2.0 *. h }
+      laplace_ascent(f, z +. step *. grad, step, n - 1, h)
+    }
+  }
+}
+
+/// Log marginal likelihood (model evidence) for the Gaussian-Gaussian model.
+///
+/// Marginal: `p(x) = ∫ p(x|z) p(z) dz = N(x; prior_mean, prior_var + likelihood_var)`.
+///
+/// Returns `log p(x)` directly (closed form). Useful as the gold-standard
+/// reference value that ELBO bounds from below.
+pub fn log_evidence_gaussian(
+  observation: Float,
+  prior_mean: Float,
+  prior_var: Float,
+  likelihood_var: Float,
+) -> Float {
+  let marginal_var = prior_var +. likelihood_var
+  case marginal_var <=. 0.0 {
+    True -> 0.0 -. large_penalty()
+    False -> {
+      let err = observation -. prior_mean
+      let log_2pi_var =
+        scalar.try_ln(2.0 *. constants.pi *. marginal_var)
+        |> result.unwrap(0.0)
+      0.0 -. 0.5 *. log_2pi_var -. err *. err /. { 2.0 *. marginal_var }
+    }
+  }
+}
+
+fn large_penalty() -> Float {
+  1.0e6
 }
