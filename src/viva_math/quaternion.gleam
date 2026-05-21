@@ -86,8 +86,7 @@ pub fn normalize(q: Quaternion) -> Quaternion {
   let m = magnitude(q)
   case m == 0.0 {
     True -> identity()
-    False ->
-      Quaternion(w: q.w /. m, x: q.x /. m, y: q.y /. m, z: q.z /. m)
+    False -> Quaternion(w: q.w /. m, x: q.x /. m, y: q.y /. m, z: q.z /. m)
   }
 }
 
@@ -143,18 +142,17 @@ pub fn nlerp(a: Quaternion, b: Quaternion, t: Float) -> Quaternion {
   let t_clamped = scalar.clamp_unit(t)
   // Pick shorter arc.
   let b_signed = case dot(a, b) <. 0.0 {
-    True -> Quaternion(w: 0.0 -. b.w, x: 0.0 -. b.x, y: 0.0 -. b.y, z: 0.0 -. b.z)
+    True ->
+      Quaternion(w: 0.0 -. b.w, x: 0.0 -. b.x, y: 0.0 -. b.y, z: 0.0 -. b.z)
     False -> b
   }
   let one_minus_t = 1.0 -. t_clamped
-  normalize(
-    Quaternion(
-      w: one_minus_t *. a.w +. t_clamped *. b_signed.w,
-      x: one_minus_t *. a.x +. t_clamped *. b_signed.x,
-      y: one_minus_t *. a.y +. t_clamped *. b_signed.y,
-      z: one_minus_t *. a.z +. t_clamped *. b_signed.z,
-    ),
-  )
+  normalize(Quaternion(
+    w: one_minus_t *. a.w +. t_clamped *. b_signed.w,
+    x: one_minus_t *. a.x +. t_clamped *. b_signed.x,
+    y: one_minus_t *. a.y +. t_clamped *. b_signed.y,
+    z: one_minus_t *. a.z +. t_clamped *. b_signed.z,
+  ))
 }
 
 /// Spherical linear interpolation (SLERP) — constant angular velocity.
@@ -212,14 +210,10 @@ pub fn to_axis_angle(q: Quaternion) -> #(Vec3, Float) {
 
 /// Approximate equality up to a tolerance.
 pub fn is_close(a: Quaternion, b: Quaternion, tol: Float) -> Bool {
-  float.absolute_value(a.w -. b.w)
-  <=. tol
-  && float.absolute_value(a.x -. b.x)
-  <=. tol
-  && float.absolute_value(a.y -. b.y)
-  <=. tol
-  && float.absolute_value(a.z -. b.z)
-  <=. tol
+  float.absolute_value(a.w -. b.w) <=. tol
+  && float.absolute_value(a.x -. b.x) <=. tol
+  && float.absolute_value(a.y -. b.y) <=. tol
+  && float.absolute_value(a.z -. b.z) <=. tol
 }
 
 @external(erlang, "math", "sin")

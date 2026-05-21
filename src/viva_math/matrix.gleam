@@ -294,13 +294,7 @@ pub fn mat2_eigenvalues(m: Mat2) -> Result(#(Float, Float), Nil) {
 pub fn mat3_symmetric_eigenvalues(
   m: Mat3,
 ) -> Result(#(Float, Float, Float), Nil) {
-  let p1 =
-    m.m12
-    *. m.m12
-    +. m.m13
-    *. m.m13
-    +. m.m23
-    *. m.m23
+  let p1 = m.m12 *. m.m12 +. m.m13 *. m.m13 +. m.m23 *. m.m23
 
   case p1 == 0.0 {
     True -> {
@@ -310,10 +304,14 @@ pub fn mat3_symmetric_eigenvalues(
     False -> {
       let q = mat3_trace(m) /. 3.0
       let p2 =
-        { m.m11 -. q } *. { m.m11 -. q }
-        +. { m.m22 -. q } *. { m.m22 -. q }
-        +. { m.m33 -. q } *. { m.m33 -. q }
-        +. 2.0 *. p1
+        { m.m11 -. q }
+        *. { m.m11 -. q }
+        +. { m.m22 -. q }
+        *. { m.m22 -. q }
+        +. { m.m33 -. q }
+        *. { m.m33 -. q }
+        +. 2.0
+        *. p1
       let p = scalar.sqrt(p2 /. 6.0)
       // B = (M - qI) / p
       let inv_p = 1.0 /. p

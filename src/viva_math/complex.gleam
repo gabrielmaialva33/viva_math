@@ -55,10 +55,7 @@ pub fn sub(a: Complex, b: Complex) -> Complex {
 }
 
 pub fn mul(a: Complex, b: Complex) -> Complex {
-  Complex(
-    a.re *. b.re -. a.im *. b.im,
-    a.re *. b.im +. a.im *. b.re,
-  )
+  Complex(a.re *. b.re -. a.im *. b.im, a.re *. b.im +. a.im *. b.re)
 }
 
 pub fn div(a: Complex, b: Complex) -> Complex {
@@ -183,8 +180,7 @@ pub fn tan(z: Complex) -> Complex {
 
 /// Approximate equality.
 pub fn is_close(a: Complex, b: Complex, tol: Float) -> Bool {
-  float.absolute_value(a.re -. b.re)
-  <=. tol
+  float.absolute_value(a.re -. b.re) <=. tol
   && float.absolute_value(a.im -. b.im) <=. tol
 }
 
