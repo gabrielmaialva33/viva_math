@@ -1,8 +1,12 @@
 //// Optimal transport distances for empirical affective distributions.
 ////
-//// Implements one-dimensional empirical Wasserstein distances and PAD
-//// component aggregation following Villani (2008), *Optimal Transport*, and
-//// Peyre & Cuturi (2019), *Computational Optimal Transport*.
+//// 1D empirical Wasserstein distances and PAD componentwise aggregation
+//// following Villani (2008), *Optimal Transport*, and Peyré & Cuturi (2019),
+//// *Computational Optimal Transport*.
+////
+//// **Complexity**: O((n+m)·log(n+m)) dominated by sort. The post-sort
+//// integral walks both quantile sequences in linear time without random
+//// indexing — see `walk_quantile_*` helpers below.
 
 import gleam/float
 import gleam/list
@@ -12,10 +16,14 @@ import viva_math/scalar
 import viva_math/vector
 
 /// Wasserstein-1 (Earth Mover) between 1D empirical samples.
-/// W_1(P, Q) = integral |F_P(x) - F_Q(x)| dx.
-/// Uses O(n log n) sorting plus pairwise quantile differences when sample sizes
-/// match; otherwise integrates empirical CDF gaps over the union of samples
-/// (Villani 2008; Peyre & Cuturi 2019).
+///
+/// `W_1(P, Q) = ∫_0^1 |F_P⁻¹(u) − F_Q⁻¹(u)| du`.
+///
+/// Equivalent to `∫_ℝ |F_P(x) − F_Q(x)| dx` (the `W_1` duality holds via
+/// integration by parts; the absolute-value identity is symmetric). For
+/// equal sample sizes reduces to `(1/n)·Σ |p_(i) − q_(i)|`. For unequal sizes
+/// integrates `|p_i − q_j|·Δu` across the union of quantile breakpoints
+/// `{i/n} ∪ {j/m}` in linear time after sorting.
 pub fn wasserstein_1_empirical(
   p: List(Float),
   q: List(Float),
@@ -28,19 +36,21 @@ pub fn wasserstein_1_empirical(
       let q_sorted = sort_samples(q)
       let p_len = list.length(p_sorted)
       let q_len = list.length(q_sorted)
-
       case p_len == q_len {
-        True -> {
-          let total =
-            list.zip(p_sorted, q_sorted)
-            |> list.fold(0.0, fn(acc, pair) {
-              let #(a, b) = pair
-              acc +. float.absolute_value(a -. b)
-            })
-
-          Ok(total /. int_to_float(p_len))
-        }
-        False -> Ok(integrate_cdf_gap(p_sorted, q_sorted, False))
+        True ->
+          Ok(walk_pair_abs(p_sorted, q_sorted, 0.0) /. int_to_float(p_len))
+        False ->
+          Ok(walk_quantile(
+            p_sorted,
+            q_sorted,
+            int_to_float(p_len),
+            int_to_float(q_len),
+            0,
+            0,
+            0.0,
+            0.0,
+            False,
+          ))
       }
     }
   }
@@ -50,17 +60,17 @@ pub fn wasserstein_1_empirical(
 ///
 /// `W_2²(P, Q) = ∫_0^1 (F_P⁻¹(u) − F_Q⁻¹(u))² du`.
 ///
-/// For equal sample sizes, the inverse-CDF integral reduces to the sorted
+/// For equal sample sizes the inverse-CDF integral reduces to the sorted
 /// pairwise mean-square difference. For unequal sizes we integrate over the
-/// union of quantile breakpoints `{i/n} ∪ {j/m}`: in each slab `[u_prev, u_next]`
-/// both inverse CDFs are constant at `p_sorted[i]` and `q_sorted[j]`, so the
-/// contribution is `(p_sorted[i] − q_sorted[j])² · (u_next − u_prev)`.
+/// union of quantile breakpoints `{i/n} ∪ {j/m}` in linear time: in each
+/// slab `[u_prev, u_next]` both inverse CDFs are constant, contributing
+/// `(p_sorted[i] − q_sorted[j])² · (u_next − u_prev)`.
 ///
 /// Returns `W_2`, not `W_2²`. References: Villani (2008); Peyré & Cuturi (2019).
 ///
-/// **Note**: a CDF-based path `∫(F_P−F_Q)² dx` would be wrong for unequal
-/// sample sizes — the `W_1`/`W_2` duality via integration by parts only holds
-/// for `p=1` (absolute value), not for the quadratic kernel.
+/// **Note**: a CDF-based path `∫(F_P−F_Q)² dx` is **incorrect** for unequal
+/// sample sizes — the `W_1`/`W_2` duality via integration by parts only
+/// holds for `p=1` (absolute value), not for the quadratic kernel.
 pub fn wasserstein_2_empirical(
   p: List(Float),
   q: List(Float),
@@ -73,21 +83,14 @@ pub fn wasserstein_2_empirical(
       let q_sorted = sort_samples(q)
       let p_len = list.length(p_sorted)
       let q_len = list.length(q_sorted)
-
       case p_len == q_len {
-        True -> {
-          let total =
-            list.zip(p_sorted, q_sorted)
-            |> list.fold(0.0, fn(acc, pair) {
-              let #(a, b) = pair
-              let delta = a -. b
-              acc +. delta *. delta
-            })
-          Ok(scalar.sqrt(total /. int_to_float(p_len)))
-        }
+        True ->
+          Ok(scalar.sqrt(
+            walk_pair_squared(p_sorted, q_sorted, 0.0) /. int_to_float(p_len),
+          ))
         False ->
           Ok(
-            scalar.sqrt(quantile_integral_squared(
+            scalar.sqrt(walk_quantile(
               p_sorted,
               q_sorted,
               int_to_float(p_len),
@@ -96,6 +99,7 @@ pub fn wasserstein_2_empirical(
               0,
               0.0,
               0.0,
+              True,
             )),
           )
       }
@@ -103,61 +107,9 @@ pub fn wasserstein_2_empirical(
   }
 }
 
-/// Quantile-based integral `∫_0^1 (F_P⁻¹(u) − F_Q⁻¹(u))² du` for sorted
-/// empirical samples of unequal sizes. Walks both breakpoint sequences
-/// `(i+1)/n` and `(j+1)/m` in tandem, accumulating squared-difference slabs.
-fn quantile_integral_squared(
-  p_sorted: List(Float),
-  q_sorted: List(Float),
-  n: Float,
-  m: Float,
-  i: Int,
-  j: Int,
-  u_prev: Float,
-  acc: Float,
-) -> Float {
-  case nth(p_sorted, i), nth(q_sorted, j) {
-    Ok(p_val), Ok(q_val) -> {
-      let u_p = int_to_float(i + 1) /. n
-      let u_q = int_to_float(j + 1) /. m
-      let u_next = float.min(u_p, u_q)
-      let delta = p_val -. q_val
-      let new_acc = acc +. delta *. delta *. { u_next -. u_prev }
-      let next_i = case u_p <=. u_q {
-        True -> i + 1
-        False -> i
-      }
-      let next_j = case u_q <=. u_p {
-        True -> j + 1
-        False -> j
-      }
-      quantile_integral_squared(
-        p_sorted,
-        q_sorted,
-        n,
-        m,
-        next_i,
-        next_j,
-        u_next,
-        new_acc,
-      )
-    }
-    _, _ -> acc
-  }
-}
-
-fn nth(xs: List(a), idx: Int) -> Result(a, Nil) {
-  case xs, idx {
-    [], _ -> Error(Nil)
-    [x, ..], 0 -> Ok(x)
-    [_, ..rest], n if n > 0 -> nth(rest, n - 1)
-    _, _ -> Error(Nil)
-  }
-}
-
 /// Closed form W_2 for scalar Gaussians.
-/// W_2(N(mu_1, sigma_1^2), N(mu_2, sigma_2^2))
-/// = sqrt((mu_1 - mu_2)^2 + (sigma_1 - sigma_2)^2).
+///
+/// `W_2(N(μ₁, σ₁²), N(μ₂, σ₂²)) = √((μ₁ − μ₂)² + (σ₁ − σ₂)²)`.
 pub fn wasserstein_2_gaussian(
   g1: distributions.Gaussian,
   g2: distributions.Gaussian,
@@ -189,17 +141,12 @@ pub fn wasserstein_pad(
     [], _ -> Error(Nil)
     _, [] -> Error(Nil)
     _, _ -> {
-      let p_pleasure = list.map(p, vector.pleasure)
-      let q_pleasure = list.map(q, vector.pleasure)
-      let p_arousal = list.map(p, vector.arousal)
-      let q_arousal = list.map(q, vector.arousal)
-      let p_dominance = list.map(p, vector.dominance)
-      let q_dominance = list.map(q, vector.dominance)
-
+      let #(p_p, p_a, p_d) = split_pad(p, [], [], [])
+      let #(q_p, q_a, q_d) = split_pad(q, [], [], [])
       case
-        wasserstein_2_empirical(p_pleasure, q_pleasure),
-        wasserstein_2_empirical(p_arousal, q_arousal),
-        wasserstein_2_empirical(p_dominance, q_dominance)
+        wasserstein_2_empirical(p_p, q_p),
+        wasserstein_2_empirical(p_a, q_a),
+        wasserstein_2_empirical(p_d, q_d)
       {
         Ok(pleasure), Ok(arousal), Ok(dominance) ->
           Ok(scalar.sqrt(
@@ -211,78 +158,109 @@ pub fn wasserstein_pad(
   }
 }
 
-fn integrate_cdf_gap(
-  p_sorted: List(Float),
-  q_sorted: List(Float),
-  squared: Bool,
-) -> Float {
-  let points = list.append(p_sorted, q_sorted) |> sort_samples
-  let p_len = int_to_float(list.length(p_sorted))
-  let q_len = int_to_float(list.length(q_sorted))
+// ============================================================================
+// Internal — linear-time walks
+// ============================================================================
 
-  case points {
-    [] -> 0.0
-    [first, ..rest] ->
-      integrate_cdf_gap_from(
-        rest,
-        first,
-        p_sorted,
-        q_sorted,
-        p_len,
-        q_len,
-        squared,
-        0.0,
-      )
-  }
-}
-
-fn integrate_cdf_gap_from(
-  points: List(Float),
-  current: Float,
-  p_sorted: List(Float),
-  q_sorted: List(Float),
-  p_len: Float,
-  q_len: Float,
-  squared: Bool,
-  acc: Float,
-) -> Float {
-  let delta =
-    empirical_cdf_at(p_sorted, current, p_len)
-    -. empirical_cdf_at(q_sorted, current, q_len)
-  let height = case squared {
-    True -> delta *. delta
-    False -> float.absolute_value(delta)
-  }
-
-  case points {
-    [] -> acc
-    [next, ..rest] ->
-      integrate_cdf_gap_from(
-        rest,
-        next,
-        p_sorted,
-        q_sorted,
-        p_len,
-        q_len,
-        squared,
-        acc +. height *. { next -. current },
-      )
-  }
-}
-
-fn empirical_cdf_at(sorted: List(Float), x: Float, len: Float) -> Float {
-  int_to_float(count_less_or_equal(sorted, x, 0)) /. len
-}
-
-fn count_less_or_equal(sorted: List(Float), x: Float, count: Int) -> Int {
-  case sorted {
-    [] -> count
-    [value, ..rest] -> {
-      case value <=. x {
-        True -> count_less_or_equal(rest, x, count + 1)
-        False -> count
-      }
+/// Equal-size W_2 numerator `Σ (p_i − q_i)²` via single-pass cons traversal,
+/// no `list.zip` intermediate.
+fn walk_pair_squared(p: List(Float), q: List(Float), acc: Float) -> Float {
+  case p, q {
+    [a, ..rest_p], [b, ..rest_q] -> {
+      let d = a -. b
+      walk_pair_squared(rest_p, rest_q, acc +. d *. d)
     }
+    _, _ -> acc
+  }
+}
+
+/// Equal-size W_1 numerator `Σ |p_i − q_i|` via single-pass cons traversal.
+fn walk_pair_abs(p: List(Float), q: List(Float), acc: Float) -> Float {
+  case p, q {
+    [a, ..rest_p], [b, ..rest_q] ->
+      walk_pair_abs(rest_p, rest_q, acc +. float.absolute_value(a -. b))
+    _, _ -> acc
+  }
+}
+
+/// O(n+m) quantile-integral walk over the breakpoint union `{(i+1)/n} ∪
+/// `{(j+1)/m}`. `squared=True` gives the W_2² integrand; otherwise W_1.
+///
+/// Both lists are consumed by their heads — never indexed by position — so
+/// each step is O(1) and the total is O(n+m).
+fn walk_quantile(
+  p_sorted: List(Float),
+  q_sorted: List(Float),
+  n: Float,
+  m: Float,
+  i: Int,
+  j: Int,
+  u_prev: Float,
+  acc: Float,
+  squared: Bool,
+) -> Float {
+  case p_sorted, q_sorted {
+    [p_val, ..p_tail], [q_val, ..q_tail] -> {
+      let u_p = int_to_float(i + 1) /. n
+      let u_q = int_to_float(j + 1) /. m
+      let u_next = float.min(u_p, u_q)
+      let delta = p_val -. q_val
+      let height = case squared {
+        True -> delta *. delta
+        False -> float.absolute_value(delta)
+      }
+      let new_acc = acc +. height *. { u_next -. u_prev }
+      // Advance whichever list has the smaller breakpoint (or both on tie).
+      let advance_p = u_p <=. u_q
+      let advance_q = u_q <=. u_p
+      let next_p = case advance_p {
+        True -> p_tail
+        False -> p_sorted
+      }
+      let next_q = case advance_q {
+        True -> q_tail
+        False -> q_sorted
+      }
+      let next_i = case advance_p {
+        True -> i + 1
+        False -> i
+      }
+      let next_j = case advance_q {
+        True -> j + 1
+        False -> j
+      }
+      walk_quantile(
+        next_p,
+        next_q,
+        n,
+        m,
+        next_i,
+        next_j,
+        u_next,
+        new_acc,
+        squared,
+      )
+    }
+    _, _ -> acc
+  }
+}
+
+/// Single-pass PAD projection — avoids three `list.map` passes.
+fn split_pad(
+  xs: List(vector.Vec3),
+  p_acc: List(Float),
+  a_acc: List(Float),
+  d_acc: List(Float),
+) -> #(List(Float), List(Float), List(Float)) {
+  case xs {
+    [] -> #(list.reverse(p_acc), list.reverse(a_acc), list.reverse(d_acc))
+    [v, ..rest] ->
+      split_pad(
+        rest,
+        [vector.pleasure(v), ..p_acc],
+        [vector.arousal(v), ..a_acc],
+        [vector.dominance(v), ..d_acc],
+      )
   }
 }
 
