@@ -103,7 +103,13 @@ pub fn step(
   let OUParams1D(theta, mu, sigma) = params
   let decay = scalar.exp(0.0 -. theta *. dt)
   let drift_term = mu +. { x -. mu } *. decay
-  let var_term = sigma *. sigma *. { 1.0 -. decay *. decay } /. { 2.0 *. theta }
+  // `1 − e^(−2θdt) = −expm1(−2θdt)` — avoids catastrophic cancellation when
+  // `θ·dt → 0` (reduces correctly to the Brownian limit `σ²·dt`).
+  let var_term =
+    sigma
+    *. sigma
+    *. { 0.0 -. scalar.expm1(0.0 -. 2.0 *. theta *. dt) }
+    /. { 2.0 *. theta }
   let std_term = case float.square_root(var_term) {
     Ok(s) -> s
     Error(_) -> 0.0
@@ -160,10 +166,21 @@ pub fn mean_at(params: OUParams1D, x0: Float, t: Float) -> Float {
 /// Closed-form `Var[X_t | X_0 = x0]`.
 ///
 /// `σ² / (2θ) · (1 − e^(−2θ·t))`
+///
+/// **Note**: the conditional variance is **independent of `x0`** — OU's noise
+/// is additive Brownian, so all `x0`-dependence is absorbed into the mean.
+/// The parameter is kept in the signature only to mirror `mean_at` and
+/// `variance_at_vec3` for API symmetry; pass any value.
+///
+/// Routed through `scalar.expm1` so the Brownian limit `σ²·t` (as `θ·t → 0`)
+/// is recovered without catastrophic cancellation.
 pub fn variance_at(params: OUParams1D, _x0: Float, t: Float) -> Float {
   let OUParams1D(theta, _, sigma) = params
-  let decay2 = scalar.exp(0.0 -. 2.0 *. theta *. t)
-  sigma *. sigma *. { 1.0 -. decay2 } /. { 2.0 *. theta }
+  // `1 − e^(−2θt) = −expm1(−2θt)` — avoids cancellation as `θ·t → 0`.
+  sigma
+  *. sigma
+  *. { 0.0 -. scalar.expm1(0.0 -. 2.0 *. theta *. t) }
+  /. { 2.0 *. theta }
 }
 
 /// Stationary variance `σ² / (2θ)` — the variance of `X_∞ ~ N(μ, σ²/(2θ))`.
