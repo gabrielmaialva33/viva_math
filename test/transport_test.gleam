@@ -2,7 +2,7 @@
 //// W₂ for Gaussians, and componentwise PAD aggregation.
 
 import gleeunit/should
-import test_support.{is_close}
+import test_support.{is_close, is_close_hybrid, loose, tight}
 import viva_math/distributions
 import viva_math/transport
 import viva_math/vector
@@ -65,4 +65,66 @@ pub fn wasserstein_2_gaussian_negative_stddev_test() {
       distributions.Gaussian(mean: 0.0, stddev: 1.0),
     )
   should.be_true(is_close(d, 0.0, 1.0e-12))
+}
+
+pub fn wasserstein_2_multivariate_empty_error_test() {
+  transport.wasserstein_2_multivariate([], [vector.zero()], 0.1, 100)
+  |> should.equal(Error(Nil))
+}
+
+pub fn wasserstein_2_multivariate_identity_test() {
+  let samples = [
+    vector.pad(0.0, 0.0, 0.0),
+    vector.pad(1.0, 0.0, 0.0),
+    vector.pad(0.0, 1.0, 0.0),
+  ]
+  let assert Ok(distance) =
+    transport.wasserstein_2_multivariate(samples, samples, 0.001, 100)
+  should.be_true(is_close(distance, 0.0, loose))
+}
+
+pub fn wasserstein_2_multivariate_single_point_translation_test() {
+  let assert Ok(distance) =
+    transport.wasserstein_2_multivariate(
+      [vector.zero()],
+      [vector.pad(1.0, 0.0, 0.0)],
+      0.1,
+      100,
+    )
+  should.be_true(is_close(distance, 1.0, tight))
+}
+
+pub fn wasserstein_2_multivariate_symmetry_test() {
+  let p = [
+    vector.pad(0.0, 0.1, 0.2),
+    vector.pad(0.4, 0.5, 0.6),
+    vector.pad(0.8, 0.9, 1.0),
+  ]
+  let q = [
+    vector.pad(0.2, 0.0, 0.1),
+    vector.pad(0.6, 0.4, 0.5),
+    vector.pad(1.0, 0.8, 0.9),
+  ]
+  let assert Ok(pq) = transport.wasserstein_2_multivariate(p, q, 0.05, 150)
+  let assert Ok(qp) = transport.wasserstein_2_multivariate(q, p, 0.05, 150)
+  should.be_true(is_close(pq, qp, loose))
+}
+
+pub fn wasserstein_2_multivariate_matches_pad_for_translation_test() {
+  let p = [
+    vector.pad(0.0, 0.0, 0.0),
+    vector.pad(0.0, 1.0, 0.0),
+    vector.pad(1.0, 0.0, 0.0),
+    vector.pad(1.0, 1.0, 0.0),
+  ]
+  let q = [
+    vector.pad(0.5, -0.25, 0.75),
+    vector.pad(0.5, 0.75, 0.75),
+    vector.pad(1.5, -0.25, 0.75),
+    vector.pad(1.5, 0.75, 0.75),
+  ]
+  let assert Ok(multivariate) =
+    transport.wasserstein_2_multivariate(p, q, 0.01, 150)
+  let assert Ok(pad) = transport.wasserstein_pad(p, q)
+  should.be_true(is_close_hybrid(multivariate, pad, loose, loose))
 }

@@ -162,9 +162,199 @@ pub fn wasserstein_pad(
   }
 }
 
+/// Multivariate Wasserstein-2 distance via Sinkhorn-Knopp entropic
+/// regularization (Cuturi 2013).
+///
+/// Solves the entropic OT problem
+/// `min_π ⟨π, C⟩ + ε·H(π)` subject to `π·1 = a`, `πᵀ·1 = b`,
+/// where `C[i,j] = ‖x_i − y_j‖²` and `π` is the transport plan.
+///
+/// Returns `√(⟨π, C⟩)`, the W₂ distance induced by the regularized plan,
+/// dropping the entropic term itself.
+///
+/// - `xs`, `ys`: empirical PAD samples with uniform weights.
+/// - `epsilon`: regularization strength, typically `0.01` to `1.0`.
+/// - `max_iter`: Sinkhorn iterations, typically `100` to `1000`.
+/// - Returns `Error(Nil)` if either list is empty.
+pub fn wasserstein_2_multivariate(
+  xs: List(vector.Vec3),
+  ys: List(vector.Vec3),
+  epsilon: Float,
+  max_iter: Int,
+) -> Result(Float, Nil) {
+  case xs, ys {
+    [], _ -> Error(Nil)
+    _, [] -> Error(Nil)
+    _, _ -> {
+      let n = int_to_float(list.length(xs))
+      let m = int_to_float(list.length(ys))
+      let a = 1.0 /. n
+      let b = 1.0 /. m
+      let costs = cost_matrix(xs, ys)
+      let kernel = sinkhorn_kernel(costs, float.max(epsilon, 1.0e-12))
+      let u0 = fill(list.length(xs), a, [])
+      let v0 = fill(list.length(ys), b, [])
+      let #(u, v) = sinkhorn_iter(kernel, max_iter, a, b, u0, v0)
+      let cost = transport_cost(costs, kernel, u, v)
+      Ok(scalar.sqrt(float.max(cost, 0.0)))
+    }
+  }
+}
+
 // ============================================================================
 // Internal — linear-time walks
 // ============================================================================
+
+fn cost_matrix(
+  xs: List(vector.Vec3),
+  ys: List(vector.Vec3),
+) -> List(List(Float)) {
+  list.map(xs, fn(x) { list.map(ys, fn(y) { vector.distance_squared(x, y) }) })
+}
+
+fn sinkhorn_kernel(
+  costs: List(List(Float)),
+  epsilon: Float,
+) -> List(List(Float)) {
+  list.map(costs, fn(row) {
+    list.map(row, fn(cost) { scalar.exp(0.0 -. cost /. epsilon) })
+  })
+}
+
+fn sinkhorn_iter(
+  kernel: List(List(Float)),
+  remaining: Int,
+  a: Float,
+  b: Float,
+  u: List(Float),
+  v: List(Float),
+) -> #(List(Float), List(Float)) {
+  case remaining <= 0 {
+    True -> #(u, v)
+    False -> {
+      let next_u = scale_inverse_rows(kernel, v, a)
+      let next_v = scale_inverse_columns(kernel, next_u, b)
+      sinkhorn_iter(kernel, remaining - 1, a, b, next_u, next_v)
+    }
+  }
+}
+
+fn scale_inverse_rows(
+  kernel: List(List(Float)),
+  v: List(Float),
+  mass: Float,
+) -> List(Float) {
+  list.map(kernel, fn(row) { safe_ratio(mass, dot_lists(row, v, 0.0)) })
+}
+
+fn scale_inverse_columns(
+  kernel: List(List(Float)),
+  u: List(Float),
+  mass: Float,
+) -> List(Float) {
+  case kernel {
+    [] -> []
+    [first, ..] -> scale_inverse_columns_walk(first, kernel, u, mass, [])
+  }
+}
+
+fn scale_inverse_columns_walk(
+  first_row: List(Float),
+  kernel: List(List(Float)),
+  u: List(Float),
+  mass: Float,
+  acc: List(Float),
+) -> List(Float) {
+  case first_row {
+    [] -> list.reverse(acc)
+    [_, ..rest] -> {
+      let column_sum = weighted_column_head(kernel, u, 0.0)
+      let tails = drop_column_head(kernel, [])
+      scale_inverse_columns_walk(rest, tails, u, mass, [
+        safe_ratio(mass, column_sum),
+        ..acc
+      ])
+    }
+  }
+}
+
+fn weighted_column_head(
+  rows: List(List(Float)),
+  weights: List(Float),
+  acc: Float,
+) -> Float {
+  case rows, weights {
+    [[x, ..], ..rest_rows], [w, ..rest_weights] ->
+      weighted_column_head(rest_rows, rest_weights, acc +. w *. x)
+    _, _ -> acc
+  }
+}
+
+fn drop_column_head(
+  rows: List(List(Float)),
+  acc: List(List(Float)),
+) -> List(List(Float)) {
+  case rows {
+    [] -> list.reverse(acc)
+    [[_, ..rest], ..tail] -> drop_column_head(tail, [rest, ..acc])
+    [[], ..tail] -> drop_column_head(tail, [[], ..acc])
+  }
+}
+
+fn transport_cost(
+  costs: List(List(Float)),
+  kernel: List(List(Float)),
+  u: List(Float),
+  v: List(Float),
+) -> Float {
+  case costs, kernel, u {
+    [cost_row, ..cost_tail], [kernel_row, ..kernel_tail], [u_i, ..u_tail] ->
+      transport_cost_row(cost_row, kernel_row, u_i, v, 0.0)
+      +. transport_cost(cost_tail, kernel_tail, u_tail, v)
+    _, _, _ -> 0.0
+  }
+}
+
+fn transport_cost_row(
+  costs: List(Float),
+  kernel: List(Float),
+  u_i: Float,
+  v: List(Float),
+  acc: Float,
+) -> Float {
+  case costs, kernel, v {
+    [cost, ..cost_tail], [k, ..kernel_tail], [v_j, ..v_tail] ->
+      transport_cost_row(
+        cost_tail,
+        kernel_tail,
+        u_i,
+        v_tail,
+        acc +. u_i *. k *. v_j *. cost,
+      )
+    _, _, _ -> acc
+  }
+}
+
+fn dot_lists(a: List(Float), b: List(Float), acc: Float) -> Float {
+  case a, b {
+    [x, ..xs], [y, ..ys] -> dot_lists(xs, ys, acc +. x *. y)
+    _, _ -> acc
+  }
+}
+
+fn safe_ratio(numerator: Float, denominator: Float) -> Float {
+  case denominator <=. 0.0 {
+    True -> 0.0
+    False -> numerator /. denominator
+  }
+}
+
+fn fill(count: Int, value: Float, acc: List(Float)) -> List(Float) {
+  case count <= 0 {
+    True -> acc
+    False -> fill(count - 1, value, [value, ..acc])
+  }
+}
 
 /// Equal-size W_2 numerator `Σ (p_i − q_i)²` via single-pass cons traversal,
 /// no `list.zip` intermediate.
