@@ -47,10 +47,20 @@ pub fn wasserstein_1_empirical(
 }
 
 /// Wasserstein-2 between 1D empirical samples.
-/// W_2^2(P, Q) = integral (F_P^-1(t) - F_Q^-1(t))^2 dt.
-/// Uses sorted empirical quantiles for equal sample sizes; for unequal sample
-/// sizes it integrates squared empirical CDF gaps over the sample union
-/// (Villani 2008; Peyre & Cuturi 2019). Returns W_2, not W_2^2.
+///
+/// `W_2²(P, Q) = ∫_0^1 (F_P⁻¹(u) − F_Q⁻¹(u))² du`.
+///
+/// For equal sample sizes, the inverse-CDF integral reduces to the sorted
+/// pairwise mean-square difference. For unequal sizes we integrate over the
+/// union of quantile breakpoints `{i/n} ∪ {j/m}`: in each slab `[u_prev, u_next]`
+/// both inverse CDFs are constant at `p_sorted[i]` and `q_sorted[j]`, so the
+/// contribution is `(p_sorted[i] − q_sorted[j])² · (u_next − u_prev)`.
+///
+/// Returns `W_2`, not `W_2²`. References: Villani (2008); Peyré & Cuturi (2019).
+///
+/// **Note**: a CDF-based path `∫(F_P−F_Q)² dx` would be wrong for unequal
+/// sample sizes — the `W_1`/`W_2` duality via integration by parts only holds
+/// for `p=1` (absolute value), not for the quadratic kernel.
 pub fn wasserstein_2_empirical(
   p: List(Float),
   q: List(Float),
@@ -73,12 +83,75 @@ pub fn wasserstein_2_empirical(
               let delta = a -. b
               acc +. delta *. delta
             })
-
           Ok(scalar.sqrt(total /. int_to_float(p_len)))
         }
-        False -> Ok(scalar.sqrt(integrate_cdf_gap(p_sorted, q_sorted, True)))
+        False ->
+          Ok(
+            scalar.sqrt(quantile_integral_squared(
+              p_sorted,
+              q_sorted,
+              int_to_float(p_len),
+              int_to_float(q_len),
+              0,
+              0,
+              0.0,
+              0.0,
+            )),
+          )
       }
     }
+  }
+}
+
+/// Quantile-based integral `∫_0^1 (F_P⁻¹(u) − F_Q⁻¹(u))² du` for sorted
+/// empirical samples of unequal sizes. Walks both breakpoint sequences
+/// `(i+1)/n` and `(j+1)/m` in tandem, accumulating squared-difference slabs.
+fn quantile_integral_squared(
+  p_sorted: List(Float),
+  q_sorted: List(Float),
+  n: Float,
+  m: Float,
+  i: Int,
+  j: Int,
+  u_prev: Float,
+  acc: Float,
+) -> Float {
+  case nth(p_sorted, i), nth(q_sorted, j) {
+    Ok(p_val), Ok(q_val) -> {
+      let u_p = int_to_float(i + 1) /. n
+      let u_q = int_to_float(j + 1) /. m
+      let u_next = float.min(u_p, u_q)
+      let delta = p_val -. q_val
+      let new_acc = acc +. delta *. delta *. { u_next -. u_prev }
+      let next_i = case u_p <=. u_q {
+        True -> i + 1
+        False -> i
+      }
+      let next_j = case u_q <=. u_p {
+        True -> j + 1
+        False -> j
+      }
+      quantile_integral_squared(
+        p_sorted,
+        q_sorted,
+        n,
+        m,
+        next_i,
+        next_j,
+        u_next,
+        new_acc,
+      )
+    }
+    _, _ -> acc
+  }
+}
+
+fn nth(xs: List(a), idx: Int) -> Result(a, Nil) {
+  case xs, idx {
+    [], _ -> Error(Nil)
+    [x, ..], 0 -> Ok(x)
+    [_, ..rest], n if n > 0 -> nth(rest, n - 1)
+    _, _ -> Error(Nil)
   }
 }
 
@@ -94,9 +167,20 @@ pub fn wasserstein_2_gaussian(
   scalar.sqrt(mean_delta *. mean_delta +. stddev_delta *. stddev_delta)
 }
 
-/// Component-wise W_2 over PAD dimensions.
-/// Sums W_2^2(p_i, q_i) across pleasure, arousal, and dominance, then returns
-/// the square root (Villani 2008; Peyre & Cuturi 2019).
+/// Component-wise (marginal) Wasserstein-2 over PAD dimensions.
+///
+/// `D(P, Q) = √( W_2²(P_P, Q_P) + W_2²(P_A, Q_A) + W_2²(P_D, Q_D) )`.
+///
+/// This is **not** the multivariate W_2 (which requires solving a full
+/// optimal-transport assignment with cost `‖x − y‖²`). It is the Euclidean
+/// norm of the per-axis marginal Wasserstein distances — equivalent to the
+/// Sliced Wasserstein along the canonical PAD basis.
+///
+/// Triangle inequality holds (Minkowski over the marginal vector), so this
+/// is a **pseudo-metric** on PAD distributions: `D(P, Q) = 0` does **not**
+/// imply `P = Q` as joints — two distributions with identical marginals but
+/// different correlations are tied. Useful as a fast lower bound on the true
+/// multivariate W_2; tight when marginals are product distributions.
 pub fn wasserstein_pad(
   p: List(vector.Vec3),
   q: List(vector.Vec3),
