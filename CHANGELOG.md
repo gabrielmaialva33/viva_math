@@ -95,6 +95,33 @@ one bug and several documentation gaps, all addressed before release:
   `property_ou_variance_brownian_limit_test` (regression guard for the
   `expm1` rewrite).
 
+### Performance (post-SOTA cross-check)
+
+Performance audit (Codex GPT-5.3 + exa-driven literature review covering
+`thermox` 2024, OT1D, BONG 2024, Sliced Wasserstein 2024-2025 papers).
+Literature confirmed our algorithmic choices (Doob exact kernel for OU,
+closed-form conjugate VI, O(n log n) sort-based 1D Wasserstein) are SOTA;
+opportunities were in the implementation, not the math.
+
+- **`transport.wasserstein_1_empirical`, `wasserstein_2_empirical`**:
+  unequal-sample-size path rewritten as a single linear-time walk over the
+  union of quantile breakpoints — `O((n+m)·log(n+m))` total (dominated by
+  sort) instead of the previous `O((n+m)²)` caused by repeated `nth` lookups.
+- **`transport.wasserstein_pad`**: PAD axis projection unified into a single
+  recursive pass via `split_pad`, replacing three `list.map` traversals.
+- **`transport.wasserstein_*_empirical` (equal size)**: eliminated
+  `list.zip` intermediate via `walk_pair_squared` / `walk_pair_abs` cons
+  traversals.
+- **`ou.simulate`, `ou.simulate_vec3`**: transition kernel
+  (`decay = e^(−θΔ)`, `std = σ·√(−expm1(−2θΔ)/(2θ))`) is now pre-computed
+  once per simulation; the loop only does a multiply-add and a normal draw
+  per step. Vec3 path uses a `Kernel` record per axis.
+- **`free_energy.mean_field_update`**: single-pass `count_and_sum` replaces
+  separate `list.length` + `list.fold` — half the list traversals.
+- **`free_energy.int_to_float`**: replaced the recursive Gleam helper with
+  Erlang's `erlang:float/1` BIF (O(1)). Used everywhere `count` is
+  converted in the Bayesian path.
+
 ### Validated
 
 - 326 tests passing (was 280 at 1.2.101) — net +46 tests.
