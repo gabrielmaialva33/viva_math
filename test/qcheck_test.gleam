@@ -467,3 +467,52 @@ pub fn property_wasserstein_symmetric_test() {
   let assert Ok(d_qp) = transport.wasserstein_1_empirical(q, p)
   should.be_true(close(d_pq, d_qp, 1.0e-12))
 }
+
+// Known closed form: W_2 between {0, 2} and {1} equals exactly 1.0 — would
+// catch the previous CDF-based bug for unequal sample sizes.
+pub fn property_wasserstein_2_unequal_known_test() {
+  let assert Ok(d) = transport.wasserstein_2_empirical([0.0, 2.0], [1.0])
+  should.be_true(close(d, 1.0, 1.0e-9))
+}
+
+// W_2 symmetry across unequal sample sizes.
+pub fn property_wasserstein_2_unequal_symmetric_test() {
+  use t <- qcheck.given(qcheck.tuple3(
+    qcheck.bounded_float(-3.0, 3.0),
+    qcheck.bounded_float(-3.0, 3.0),
+    qcheck.bounded_float(-3.0, 3.0),
+  ))
+  let #(a, b, c) = t
+  let p = [a, b]
+  let q = [c]
+  let assert Ok(d_pq) = transport.wasserstein_2_empirical(p, q)
+  let assert Ok(d_qp) = transport.wasserstein_2_empirical(q, p)
+  should.be_true(close(d_pq, d_qp, 1.0e-9))
+}
+
+// KL with **unequal** variances — exercises the `log(p_var/q_var)` term that
+// the equal-variance property leaves untested.
+pub fn property_scalar_gaussian_kl_unequal_var_nonneg_test() {
+  use t <- qcheck.given(qcheck.tuple4(
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(-2.0, 2.0),
+    qcheck.bounded_float(0.1, 5.0),
+    qcheck.bounded_float(0.1, 5.0),
+  ))
+  let #(mu_q, mu_p, var_q, var_p) = t
+  let kl = free_energy.scalar_gaussian_kl(mu_q, var_q, mu_p, var_p)
+  should.be_true(kl >=. 0.0 -. 1.0e-9)
+}
+
+// OU Brownian limit: as θ·t → 0, variance_at(t) → σ²·t. The fix via
+// `scalar.expm1` should give relative error ≪ 1 even at θ·t = 1e-8.
+pub fn property_ou_variance_brownian_limit_test() {
+  use sigma <- qcheck.given(qcheck.bounded_float(0.5, 2.0))
+  let theta = 1.0e-9
+  let t = 0.5
+  let params = ou.OUParams1D(theta: theta, mu: 0.0, sigma: sigma)
+  let v = ou.variance_at(params, 0.0, t)
+  let expected = sigma *. sigma *. t
+  // tolerância relativa generosa: 1% (cancelamento sem expm1 daria >> 100%)
+  should.be_true(close(v, expected, 0.01 *. expected))
+}
