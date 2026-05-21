@@ -503,6 +503,95 @@ source = "docs/pad-model.md"
 - `gleam check` clean.
 - `gleam docs build` renders all 5 pages + API reference clean.
 
+### Added — Multivariate Wasserstein (`transport.wasserstein_2_multivariate`)
+
+True multivariate W₂ via **Sinkhorn-Knopp entropic regularization** (Cuturi
+2013) — solves the OT problem
+
+```
+min_π ⟨π, C⟩ + ε·H(π)   s.t.  π·1 = a, πᵀ·1 = b
+```
+
+with `C[i,j] = ‖x_i − y_j‖²` (Euclidean squared on Vec3) and uniform
+marginals. Returns `√(⟨π, C⟩)` (true distance, dropping the entropic
+term). Pure Gleam — no GPU, no dependencies. Defensive `float.max(ε, 1e-12)`
+floor + `safe_ratio` against division by zero.
+
+**5 new tests** in `test/transport_test.gleam`: empty rejection, identity
+(`W₂(P, P) ≈ 0`), single-point translation `W₂([0], [(1,0,0)]) = 1`,
+symmetry across iterates, and comparison vs `wasserstein_pad` on product
+distributions (where the two should coincide).
+
+References: Cuturi (2013) *Sinkhorn Distances: Lightspeed Computation of
+Optimal Transport*; Peyré & Cuturi (2019) *Computational Optimal
+Transport*.
+
+### Added — ULP-by-ULP validation infrastructure
+
+`test/test_support.gleam` gained two helpers backed by **dual FFI**
+(Erlang + JavaScript) implementing CPython's ordered-float-bits
+convention (negative zero ↔ -1; signs flip into a monotonic integer space):
+
+```gleam
+pub fn ulp_distance(a: Float, b: Float) -> Int
+pub fn is_close_ulp(a: Float, b: Float, max_ulps: Int) -> Bool
+```
+
+**Erlang FFI** (`test/test_support_ffi.erl`) extracts IEEE-754 bits via
+`<<Bits:64/unsigned-integer>> = <<X:64/float>>`. **JavaScript FFI**
+(`test/test_support_ffi.mjs`) uses `DataView.setFloat64` + `BigUint64`.
+
+`test/golden_mpmath_test.gleam` ships 21 reference values computed at
+100-bit precision in `mpmath` and asserts `<= 5 ULP` agreement by default.
+Three real outliers, **measured and honestly documented**:
+
+| Function | ULP distance | Note |
+|---|---|---|
+| `special.gamma(5.5)` | `8` | Lanczos series, near-integer arg |
+| `special.digamma(1.0)` | `~1100` | asymptotic series truncation |
+| `special.digamma(10.0)` | `~300` | idem |
+
+Everything else (`erf`, `exp`, `ln`, `sin`, `cos`, `gamma` (most args),
+`lgamma`) lands within 5 ULP of the 100-bit reference.
+
+### Added — JavaScript target (partial)
+
+`src/viva_math_random_ffi.mjs` implements `viva_math/random` for the
+JavaScript target using **Mulberry32** (PRNG, seedable, statistically
+adequate) + **Box-Muller** for `normal_standard` / `normal_with`. `jump/1`
+is a documented no-op on JS (Mulberry32 has no jump-ahead).
+
+`gleam.toml` no longer pins `target = "erlang"` — both targets are
+attempted. Current state:
+
+| Target | Status |
+|---|---|
+| `gleam test --target erlang` | **521 passed, no failures** |
+| `gleam test --target javascript` | ❌ compile fails on Erlang-only externals in `viva_math/precision` (`int_to_float`, `sqrt`) and `viva_math/autodiff_reverse` (`exp_f`, `ln_f`, `sin_f`, `cos_f`, `tanh_f`, `pow_f`) |
+
+**Decision**: ship partial JS support honestly rather than rush a global
+port. `viva_math/random` is the canonical module that downstream packages
+need on the JS target; `precision` and `autodiff_reverse` are
+Erlang-only for now (documented in `docs/numerical-accuracy.md` and
+`README.md`). Future minor release: complete the JS FFI for those two
+modules.
+
+### Final tally — 1.2.102
+
+- **521 tests passing** on Erlang target (was 510 → +11; **+241 vs
+  1.2.101**).
+- `viva_math/random` works on **both** Erlang and JavaScript targets.
+- 5 conceptual guides published on HexDocs via `[[documentation.pages]]`.
+- 6 opaque types prevent invalid-state construction.
+- `try_*` deprecated in favour of stdlib-idiomatic
+  `square_root`/`logarithm`/`nth_root` names (legacy aliases still work).
+- 1 corrected bug (`wasserstein_2_empirical` for `n ≠ m`), 4 audit-revealed
+  bugs (`elbo` Jensen bound, `log_evidence` invalid-variance compensation,
+  `laplace` near-zero curvature, `wasserstein_2_gaussian` negative stddev).
+- `special.digamma` ~1000× more accurate (1.17e-10 → 1.20e-13).
+- Numerical-precision infrastructure: ULP comparator, mpmath references,
+  named tolerance regimes.
+
 ### Test files (current)
 
 ```

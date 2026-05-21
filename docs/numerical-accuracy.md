@@ -23,6 +23,8 @@ Plus helpers:
 is_close(a, b, abs_tol)         // |a − b| ≤ abs_tol
 is_close_rel(a, b, rel_tol)     // |a − b| ≤ rel_tol · max(|a|, |b|)
 is_close_hybrid(a, b, abs, rel) // CPython-style fallback
+ulp_distance(a, b)              // IEEE-754 ULP distance
+is_close_ulp(a, b, max_ulps)    // ULP-bounded comparison
 ```
 
 ## Functions with documented precision
@@ -42,6 +44,9 @@ is_close_hybrid(a, b, abs, rel) // CPython-style fallback
 | `special.gamma(0.1)` | golden value | `1e-12` | `golden_values_test.gleam` |
 | `special.lgamma(10)` | golden value | `1e-12` | `golden_values_test.gleam` |
 | `special.digamma(5)` | golden value (post-1.2.102 fix) | `1e-12` | `golden_values_test.gleam` |
+| `scalar.{erf,exp,ln,sin,cos}` | mpmath 100-bit references | ≤ 5 ULP | `golden_mpmath_test.gleam` |
+| `special.{gamma,lgamma}` | mpmath 100-bit references | ≤ 5 ULP except `gamma(5.5)` at 8 ULP | `golden_mpmath_test.gleam` |
+| `special.digamma` | mpmath 100-bit references | 1100 ULP at `1.0`, 300 ULP at `10.0` | `golden_mpmath_test.gleam` |
 | `special.Γ(x+1) = x·Γ(x)` | recurrence | `1e-10` rel | `identities_test.gleam` |
 | `special.ψ(x+1) = ψ(x) + 1/x` | recurrence | `1e-7` abs | `identities_test.gleam` |
 | `special.lbeta(x,y) = lgamma decomp` | decomposition | `1e-12` | `identities_test.gleam` |
@@ -63,6 +68,25 @@ which reduces the error by **~1000×** at no measurable runtime cost.
 
 Test `golden_values_test.special_golden_values_test` was tightened from
 `2e-10` to `1e-12` in the same release.
+
+The ULP-based mpmath references added after 1.2.102 show that `digamma`
+is still materially less accurate than the libm-backed scalar functions:
+`digamma(1.0)` is currently 1085 ULP from the 100-bit mpmath reference and
+`digamma(10.0)` is 271 ULP away.
+
+## JavaScript target status
+
+The package is configured without a fixed `target` so Erlang remains the
+default while JavaScript compilation can be attempted. JavaScript support is
+partial as of this release:
+
+- `viva_math/random` has a JavaScript FFI backed by Mulberry32 plus
+  Box-Muller normal sampling. `jump` is a no-op on JavaScript.
+- `test/test_support` has JavaScript ULP FFI for golden-value tests.
+- Full-package `gleam test --target javascript` does not yet compile because
+  existing modules still contain Erlang-only externals, first observed in
+  `viva_math/autodiff_reverse` (`exp_f`, `ln_f`, `sin_f`, `cos_f`, `tanh_f`,
+  `pow_f`) and `viva_math/precision` (`int_to_float`, `sqrt`).
 
 ## Cusp catastrophe
 
@@ -93,10 +117,9 @@ are routed through stable identities:
 
 ## What's NOT yet validated
 
-- ULP-by-ULP comparison against `mpmath` reference values (roadmap).
 - Subnormal-number behaviour of every transcendental (most exercised
   edge case is `1e-10` for cancellation; full subnormal range is roadmap).
-- Multivariate Wasserstein (only Sliced/marginal currently supported).
+- JavaScript target parity for all Erlang FFI-backed modules.
 
 ## References
 

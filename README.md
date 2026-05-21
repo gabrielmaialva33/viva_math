@@ -7,7 +7,7 @@
 [![Erlang+JS](https://img.shields.io/badge/Erlang_%2B_JS-4B275F?style=for-the-badge)](https://gleam.run/news/multi-target-compilation/)
 [![Hex](https://img.shields.io/badge/hex.pm-viva__math-A678DD?style=for-the-badge&logo=hex&logoColor=white)](https://hex.pm/packages/viva_math)
 [![PAD](https://img.shields.io/badge/PAD-Mehrabian_1996-7C3AED?style=for-the-badge)](https://en.wikipedia.org/wiki/PAD_emotional_state_model)
-[![Tests](https://img.shields.io/badge/tests-510_passing-00875A?style=for-the-badge)](./test)
+[![Tests](https://img.shields.io/badge/tests-521_passing-00875A?style=for-the-badge)](./test)
 [![Version](https://img.shields.io/badge/version-1.2.102-CD5C5C?style=for-the-badge)](./CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/docs-hexdocs-7C3AED?style=for-the-badge)](https://hexdocs.pm/viva_math)
 [![License](https://img.shields.io/badge/license-MIT-228B22?style=for-the-badge)](./LICENSE)
@@ -48,7 +48,7 @@ Thom 1972, Friston 2010, Shannon 1948).
 | **Language**   | Pure Gleam (type-safe functional)                                                                                 |
 | **Target**     | Erlang (BEAM)                                                                                                     |
 | **Runtime deps** | `gleam_stdlib` only                                                                                             |
-| **Tests**      | 510 passing                                                                                                       |
+| **Tests**      | 521 passing (Erlang); `viva_math/random` also works on JavaScript                                                 |
 | **Domain**     | Affective computing, dynamical systems, info theory, optimal transport                                            |
 | **Public API** | `viva_math/{scalar,common,vector,cusp,free_energy,attractor,entropy,ou,transport,ode,statistics,distributions,…}` |
 
@@ -317,9 +317,10 @@ Conceptual guides published alongside the API reference on
 | Variational Free Energy (deeper Bayesian model)      |   ✅    |
 | Wasserstein distance between affective distributions |   ✅    |
 | Property-based tests on every closed form            |   ✅    |
-| Multivariate Wasserstein (true W₂ vs sliced)         |   ⏳    |
-| ULP-by-ULP `mpmath` reference validation             |   ⏳    |
-| JavaScript target (requires FFI rework)              |   ⏳    |
+| Multivariate Wasserstein (Sinkhorn-Knopp)            |   ✅    |
+| ULP-by-ULP `mpmath` reference validation             |   ✅    |
+| JavaScript target — `viva_math/random` only          |   🟡    |
+| JavaScript target — full coverage (`precision`, `autodiff_reverse`) | ⏳ |
 
 ---
 
@@ -327,7 +328,7 @@ Conceptual guides published alongside the API reference on
 
 ```bash
 git checkout -b feature/your-feature
-gleam test                  # 510 tests
+gleam test                  # 521 tests (Erlang)
 gleam format --check src test
 gleam docs build
 ```
