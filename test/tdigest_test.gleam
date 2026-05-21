@@ -138,6 +138,7 @@ pub fn td_merge_preserves_extremes_test() {
 }
 
 @external(erlang, "erlang", "float")
+@external(javascript, "./viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float
 
 /// Generate the float list `[from, from+1, ..., to]` (inclusive) by reverse-

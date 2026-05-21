@@ -419,6 +419,7 @@ fn list_at(xs: List(Float), idx: Int) -> Result(Float, Nil) {
 }
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float_erl(n: Int) -> Float
 
 fn int_to_float(n: Int) -> Float {
@@ -426,6 +427,7 @@ fn int_to_float(n: Int) -> Float {
 }
 
 @external(erlang, "erlang", "trunc")
+@external(javascript, "../viva_math_random_ffi.mjs", "trunc")
 fn float_trunc(x: Float) -> Int
 
 fn float_to_int(x: Float) -> Int {

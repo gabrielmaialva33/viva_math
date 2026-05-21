@@ -217,12 +217,15 @@ pub fn is_close(a: Quaternion, b: Quaternion, tol: Float) -> Bool {
 }
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sine(x: Float) -> Float
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cosine(x: Float) -> Float
 
 @external(erlang, "math", "acos")
+@external(javascript, "../viva_math_random_ffi.mjs", "acos")
 fn acos_raw(x: Float) -> Float
 
 fn acos_safe(x: Float) -> Float {

@@ -33,6 +33,7 @@ import viva_math/precision
 ///
 /// Delegates to `:math.erf/1` (Erlang stdlib BIF).
 @external(erlang, "math", "erf")
+@external(javascript, "../viva_math_random_ffi.mjs", "erf")
 pub fn erf(x: Float) -> Float
 
 /// Complementary error function erfc(x) = 1 - erf(x).
@@ -40,12 +41,14 @@ pub fn erf(x: Float) -> Float
 /// Computed by methods that avoid cancellation for large `x`.
 /// Delegates to `:math.erfc/1`.
 @external(erlang, "math", "erfc")
+@external(javascript, "../viva_math_random_ffi.mjs", "erfc")
 pub fn erfc(x: Float) -> Float
 
 /// Floating-point remainder `x mod y` (IEEE 754 fmod).
 ///
 /// Delegates to `:math.fmod/2`.
 @external(erlang, "math", "fmod")
+@external(javascript, "../viva_math_random_ffi.mjs", "fmod")
 pub fn fmod(x: Float, y: Float) -> Float
 
 /// `exp(x) - 1` accurate for small `x`.
@@ -79,54 +82,67 @@ pub fn log1p(x: Float) -> Float {
 
 /// Hyperbolic tangent. Delegates to `:math.tanh/1`.
 @external(erlang, "math", "tanh")
+@external(javascript, "../viva_math_random_ffi.mjs", "tanh")
 pub fn tanh(x: Float) -> Float
 
 /// Natural exponential e^x. Delegates to `:math.exp/1`.
 @external(erlang, "math", "exp")
+@external(javascript, "../viva_math_random_ffi.mjs", "exp")
 pub fn exp(x: Float) -> Float
 
 /// Natural logarithm ln(x). Domain x > 0.
 @external(erlang, "math", "log")
+@external(javascript, "../viva_math_random_ffi.mjs", "log")
 pub fn ln(x: Float) -> Float
 
 /// Square root.
 @external(erlang, "math", "sqrt")
+@external(javascript, "../viva_math_random_ffi.mjs", "sqrt")
 pub fn sqrt(x: Float) -> Float
 
 /// Power x^y.
 @external(erlang, "math", "pow")
+@external(javascript, "../viva_math_random_ffi.mjs", "pow")
 pub fn pow(x: Float, y: Float) -> Float
 
 /// Sine of `x` (radians). Delegates to `:math.sin/1`.
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 pub fn sin(x: Float) -> Float
 
 /// Cosine of `x` (radians). Delegates to `:math.cos/1`.
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 pub fn cos(x: Float) -> Float
 
 /// Tangent of `x` (radians). Delegates to `:math.tan/1`.
 @external(erlang, "math", "tan")
+@external(javascript, "../viva_math_random_ffi.mjs", "tan")
 pub fn tan(x: Float) -> Float
 
 /// Inverse sine. Domain `x ∈ [-1, 1]`; outside crashes (BIF behaviour).
 @external(erlang, "math", "asin")
+@external(javascript, "../viva_math_random_ffi.mjs", "asin")
 pub fn asin(x: Float) -> Float
 
 /// Inverse cosine. Domain `x ∈ [-1, 1]`; outside crashes (BIF behaviour).
 @external(erlang, "math", "acos")
+@external(javascript, "../viva_math_random_ffi.mjs", "acos")
 pub fn acos(x: Float) -> Float
 
 /// Two-argument arctangent `atan2(y, x)`.
 @external(erlang, "math", "atan2")
+@external(javascript, "../viva_math_random_ffi.mjs", "atan2")
 pub fn atan2(y: Float, x: Float) -> Float
 
 /// Log base 2. Delegates to `:math.log2/1`. Domain `x > 0`.
 @external(erlang, "math", "log2")
+@external(javascript, "../viva_math_random_ffi.mjs", "log2")
 pub fn log2(x: Float) -> Float
 
 /// Log base 10. Delegates to `:math.log10/1`. Domain `x > 0`.
 @external(erlang, "math", "log10")
+@external(javascript, "../viva_math_random_ffi.mjs", "log10")
 pub fn log10(x: Float) -> Float
 
 // ============================================================================
@@ -251,6 +267,7 @@ pub fn try_nth_root(x: Float, n: Int) -> Result(Float, Nil) {
 }
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float_local(n: Int) -> Float
 
 // ============================================================================
@@ -515,6 +532,7 @@ pub fn iglu_approx(x: Float, sigma: Float) -> Float {
 
 /// Single-argument arctangent. Delegates to `:math.atan/1`.
 @external(erlang, "math", "atan")
+@external(javascript, "../viva_math_random_ffi.mjs", "atan")
 pub fn atan(x: Float) -> Float
 
 fn inv_pi() -> Float {

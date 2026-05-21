@@ -108,6 +108,7 @@ fn compression_threshold(td: TDigest) -> Int {
 }
 
 @external(erlang, "erlang", "trunc")
+@external(javascript, "../viva_math_random_ffi.mjs", "trunc")
 fn trunc_float(x: Float) -> Int
 
 /// Insert many samples from a list. Equivalent to folding `insert`.

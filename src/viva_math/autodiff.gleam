@@ -291,9 +291,11 @@ fn build_input(
 }
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sine(x: Float) -> Float
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cosine(x: Float) -> Float
 
 fn range_int(from: Int, to: Int) -> List(Int) {

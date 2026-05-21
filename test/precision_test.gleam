@@ -540,6 +540,7 @@ pub fn precision_five_point_diff_test() {
 }
 
 @external(erlang, "math", "sin")
+@external(javascript, "./viva_math_random_ffi.mjs", "sin")
 fn scheduler_sin(x: Float) -> Float
 
 // ============================================================================

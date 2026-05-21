@@ -339,19 +339,25 @@ fn register_inputs(
 // ============================================================================
 
 @external(erlang, "math", "exp")
+@external(javascript, "../viva_math_random_ffi.mjs", "exp")
 fn exp_f(x: Float) -> Float
 
 @external(erlang, "math", "log")
+@external(javascript, "../viva_math_random_ffi.mjs", "log")
 fn ln_f(x: Float) -> Float
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sin_f(x: Float) -> Float
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cos_f(x: Float) -> Float
 
 @external(erlang, "math", "tanh")
+@external(javascript, "../viva_math_random_ffi.mjs", "tanh")
 fn tanh_f(x: Float) -> Float
 
 @external(erlang, "math", "pow")
+@external(javascript, "../viva_math_random_ffi.mjs", "pow")
 fn pow_f(x: Float, n: Float) -> Float

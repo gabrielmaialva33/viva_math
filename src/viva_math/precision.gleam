@@ -353,9 +353,11 @@ pub fn moments_combine(a: Moments, b: Moments) -> Moments {
 // ============================================================================
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float
 
 @external(erlang, "math", "sqrt")
+@external(javascript, "../viva_math_random_ffi.mjs", "sqrt")
 fn sqrt(x: Float) -> Float
 
 /// Stable cmp by absolute value (descending). Useful for sorting before

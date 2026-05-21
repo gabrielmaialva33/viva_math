@@ -59,31 +59,31 @@ pub type Algorithm {
 // ============================================================================
 
 @external(erlang, "viva_math_random_ffi", "seed_default")
-@external(javascript, "./viva_math_random_ffi.mjs", "seed_default")
+@external(javascript, "../viva_math_random_ffi.mjs", "seed_default")
 fn ffi_seed_default(seed: Int) -> Seed
 
 @external(erlang, "viva_math_random_ffi", "seed_with_algo")
-@external(javascript, "./viva_math_random_ffi.mjs", "seed_with_algo")
+@external(javascript, "../viva_math_random_ffi.mjs", "seed_with_algo")
 fn ffi_seed_with_algo(algo: Algorithm, seed: Int) -> Seed
 
 @external(erlang, "viva_math_random_ffi", "uniform_real")
-@external(javascript, "./viva_math_random_ffi.mjs", "uniform_real")
+@external(javascript, "../viva_math_random_ffi.mjs", "uniform_real")
 fn ffi_uniform_real(state: Seed) -> #(Float, Seed)
 
 @external(erlang, "viva_math_random_ffi", "uniform_int")
-@external(javascript, "./viva_math_random_ffi.mjs", "uniform_int")
+@external(javascript, "../viva_math_random_ffi.mjs", "uniform_int")
 fn ffi_uniform_int(n: Int, state: Seed) -> #(Int, Seed)
 
 @external(erlang, "viva_math_random_ffi", "normal_standard")
-@external(javascript, "./viva_math_random_ffi.mjs", "normal_standard")
+@external(javascript, "../viva_math_random_ffi.mjs", "normal_standard")
 fn ffi_normal_standard(state: Seed) -> #(Float, Seed)
 
 @external(erlang, "viva_math_random_ffi", "normal_with")
-@external(javascript, "./viva_math_random_ffi.mjs", "normal_with")
+@external(javascript, "../viva_math_random_ffi.mjs", "normal_with")
 fn ffi_normal_with(mu: Float, sigma: Float, state: Seed) -> #(Float, Seed)
 
 @external(erlang, "viva_math_random_ffi", "jump")
-@external(javascript, "./viva_math_random_ffi.mjs", "jump")
+@external(javascript, "../viva_math_random_ffi.mjs", "jump")
 fn ffi_jump(state: Seed) -> Seed
 
 // ============================================================================

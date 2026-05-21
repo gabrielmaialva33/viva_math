@@ -135,4 +135,5 @@ pub fn zip_with(
 }
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float

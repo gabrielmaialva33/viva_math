@@ -262,6 +262,7 @@ pub fn triangle(step: Int, period: Int) -> Float {
 // ============================================================================
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float_erl(n: Int) -> Float
 
 fn int_to_float(n: Int) -> Float {
@@ -269,9 +270,11 @@ fn int_to_float(n: Int) -> Float {
 }
 
 @external(erlang, "erlang", "trunc")
+@external(javascript, "../viva_math_random_ffi.mjs", "trunc")
 fn trunc_to_int(x: Float) -> Int
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cosine(x: Float) -> Float
 
 fn int_max(a: Int, b: Int) -> Int {

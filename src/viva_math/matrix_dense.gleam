@@ -198,6 +198,7 @@ pub fn byte_size(m: DenseMat) -> Int {
 }
 
 @external(erlang, "erlang", "bit_size")
+@external(javascript, "../viva_math_random_ffi.mjs", "bit_size")
 fn bit_size(b: BitArray) -> Int
 
 // ============================================================================

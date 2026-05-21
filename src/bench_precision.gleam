@@ -85,13 +85,17 @@ fn lcg(x: Float) -> Float {
 }
 
 @external(erlang, "math", "fmod")
+@external(javascript, "./viva_math_random_ffi.mjs", "fmod")
 fn float_fmod(a: Float, b: Float) -> Float
 
 @external(erlang, "erlang", "monotonic_time")
+@external(javascript, "./viva_math_random_ffi.mjs", "monotonic_time_ns")
 fn monotonic_time_ns() -> Int
 
 @external(erlang, "erlang", "integer_to_binary")
+@external(javascript, "./viva_math_random_ffi.mjs", "int_to_string")
 fn int_to_str(n: Int) -> String
 
 @external(erlang, "erlang", "float_to_binary")
+@external(javascript, "./viva_math_random_ffi.mjs", "float_to_string")
 fn float_to_str(f: Float) -> String

@@ -248,4 +248,5 @@ fn list_at(xs: List(Float), idx: Int) -> Result(Float, Nil) {
 }
 
 @external(erlang, "math", "tan")
+@external(javascript, "../viva_math_random_ffi.mjs", "tan")
 fn tangent(x: Float) -> Float

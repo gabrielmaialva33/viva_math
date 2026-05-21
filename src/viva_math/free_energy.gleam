@@ -780,6 +780,7 @@ pub fn bpc_precision_update(
 // implementation (which was O(log n) and arguably allocated more than needed
 // on hot paths).
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float
 
 // ============================================================================

@@ -254,6 +254,7 @@ fn combine_pairs(row: List(Float), k: Int) -> List(Float) {
 // ============================================================================
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float_erl(n: Int) -> Float
 
 fn int_to_float(n: Int) -> Float {

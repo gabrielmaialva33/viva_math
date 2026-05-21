@@ -185,16 +185,21 @@ pub fn is_close(a: Complex, b: Complex, tol: Float) -> Bool {
 }
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sine(x: Float) -> Float
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cosine(x: Float) -> Float
 
 @external(erlang, "math", "sinh")
+@external(javascript, "../viva_math_random_ffi.mjs", "sinh")
 fn sinh(x: Float) -> Float
 
 @external(erlang, "math", "cosh")
+@external(javascript, "../viva_math_random_ffi.mjs", "cosh")
 fn cosh(x: Float) -> Float
 
 @external(erlang, "math", "atan2")
+@external(javascript, "../viva_math_random_ffi.mjs", "atan2")
 fn atan2(y: Float, x: Float) -> Float

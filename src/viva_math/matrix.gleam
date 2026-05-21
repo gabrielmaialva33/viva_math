@@ -356,6 +356,7 @@ fn sort_three(a: Float, b: Float, c: Float) -> #(Float, Float, Float) {
 }
 
 @external(erlang, "math", "acos")
+@external(javascript, "../viva_math_random_ffi.mjs", "acos")
 fn acos_raw(x: Float) -> Float
 
 fn acos_safe(x: Float) -> Float {
@@ -577,9 +578,11 @@ fn list_at(xs: List(Float), idx: Int) -> Result(Float, Nil) {
 }
 
 @external(erlang, "math", "cos")
+@external(javascript, "../viva_math_random_ffi.mjs", "cos")
 fn cosine(x: Float) -> Float
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sine(x: Float) -> Float
 
 fn range_int(from: Int, to: Int) -> List(Int) {
