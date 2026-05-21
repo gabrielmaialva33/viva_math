@@ -94,6 +94,12 @@ pub fn is_valid_vec3(params: OUParamsVec3) -> Bool {
 /// `X_{t+dt} = μ + (X_t − μ)·e^(−θ·dt) + σ·sqrt((1 − e^(−2θ·dt))/(2θ)) · Z`
 ///
 /// `Z ~ N(0, 1)`. No discretization error: works correctly even for large `dt`.
+///
+/// **Caller-validated inputs**: callers must ensure `theta > 0`, `sigma >= 0`,
+/// and `dt >= 0` (use `is_valid` for the params). With `dt < 0` the variance
+/// term goes negative and `std_term` silently collapses to `0.0`, producing
+/// a deterministic backward step that consumes a normal draw without using
+/// it — not a physically meaningful transition.
 pub fn step(
   params: OUParams1D,
   x: Float,
