@@ -28,14 +28,8 @@ pub fn lgamma_mpmath_references_test() {
 }
 
 pub fn digamma_mpmath_references_test() {
-  // Current asymptotic implementation is 1085 ULP above the mpmath reference.
-  should.be_true(is_close_ulp(
-    special.digamma(1.0),
-    -0.577_215_664_901_532_9,
-    1100,
-  ))
-  // Current asymptotic implementation is 271 ULP above the mpmath reference.
-  should.be_true(is_close_ulp(special.digamma(10.0), 2.251_752_589_066_721, 300))
+  should.be_true(is_close_ulp(special.digamma(1.0), -0.577_215_664_901_532_9, 5))
+  should.be_true(is_close_ulp(special.digamma(10.0), 2.251_752_589_066_721, 5))
 }
 
 pub fn exp_ln_mpmath_references_test() {

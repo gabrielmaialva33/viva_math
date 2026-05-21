@@ -106,7 +106,7 @@ pub fn lbeta(x: Float, y: Float) -> Float {
 
 /// Digamma function ψ(x). Defined for `x > 0`.
 ///
-/// Combines the recurrence ψ(x) = ψ(x+1) - 1/x to push x ≥ 12, then evaluates
+/// Combines the recurrence ψ(x) = ψ(x+1) - 1/x to push x ≥ 20, then evaluates
 /// the asymptotic series ψ(x) ≈ ln x - 1/(2x) - Σ B₂ₖ / (2k·x^(2k)).
 pub fn digamma(x: Float) -> Float {
   case x <=. 0.0 {
@@ -116,7 +116,7 @@ pub fn digamma(x: Float) -> Float {
 }
 
 fn digamma_shifted(x: Float, accum: Float) -> Float {
-  case x <. 12.0 {
+  case x <. 20.0 {
     True -> digamma_shifted(x +. 1.0, accum -. 1.0 /. x)
     False -> accum +. digamma_asymptotic(x)
   }
@@ -188,7 +188,9 @@ pub fn binomial(n: Int, k: Int) -> Result(Float, Nil) {
 // ============================================================================
 
 @external(erlang, "erlang", "float")
+@external(javascript, "../viva_math_random_ffi.mjs", "int_to_float")
 fn int_to_float(n: Int) -> Float
 
 @external(erlang, "math", "sin")
+@external(javascript, "../viva_math_random_ffi.mjs", "sin")
 fn sine(x: Float) -> Float
