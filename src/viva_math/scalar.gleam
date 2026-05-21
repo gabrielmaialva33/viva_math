@@ -1,8 +1,8 @@
 //// Scalar mathematical functions.
 ////
-//// This module provides pipeline-friendly scalar primitives that are either
-//// missing from `gleam_community_maths` or commonly needed for ML / scientific
-//// computing. Where the Erlang stdlib already exposes a fast BIF (such as
+//// This module provides pipeline-friendly scalar primitives commonly
+//// needed for ML / scientific computing. Where the Erlang stdlib already
+//// exposes a fast BIF (such as
 //// `:math.erf/1`, `:math.erfc/1` or `:math.fmod/2`), we delegate through FFI
 //// rather than reimplementing.
 ////
@@ -96,6 +96,115 @@ pub fn sqrt(x: Float) -> Float
 /// Power x^y.
 @external(erlang, "math", "pow")
 pub fn pow(x: Float, y: Float) -> Float
+
+/// Sine of `x` (radians). Delegates to `:math.sin/1`.
+@external(erlang, "math", "sin")
+pub fn sin(x: Float) -> Float
+
+/// Cosine of `x` (radians). Delegates to `:math.cos/1`.
+@external(erlang, "math", "cos")
+pub fn cos(x: Float) -> Float
+
+/// Tangent of `x` (radians). Delegates to `:math.tan/1`.
+@external(erlang, "math", "tan")
+pub fn tan(x: Float) -> Float
+
+/// Inverse sine. Domain `x ∈ [-1, 1]`; outside crashes (BIF behaviour).
+@external(erlang, "math", "asin")
+pub fn asin(x: Float) -> Float
+
+/// Inverse cosine. Domain `x ∈ [-1, 1]`; outside crashes (BIF behaviour).
+@external(erlang, "math", "acos")
+pub fn acos(x: Float) -> Float
+
+/// Two-argument arctangent `atan2(y, x)`.
+@external(erlang, "math", "atan2")
+pub fn atan2(y: Float, x: Float) -> Float
+
+/// Log base 2. Delegates to `:math.log2/1`. Domain `x > 0`.
+@external(erlang, "math", "log2")
+pub fn log2(x: Float) -> Float
+
+/// Log base 10. Delegates to `:math.log10/1`. Domain `x > 0`.
+@external(erlang, "math", "log10")
+pub fn log10(x: Float) -> Float
+
+// ============================================================================
+// Result-wrapped variants (domain-safe)
+// ============================================================================
+
+/// Natural logarithm with domain check. Returns `Error(Nil)` for `x ≤ 0`.
+pub fn try_ln(x: Float) -> Result(Float, Nil) {
+  case x <=. 0.0 {
+    True -> Error(Nil)
+    False -> Ok(ln(x))
+  }
+}
+
+/// Log base 2 with domain check. Returns `Error(Nil)` for `x ≤ 0`.
+pub fn try_log2(x: Float) -> Result(Float, Nil) {
+  case x <=. 0.0 {
+    True -> Error(Nil)
+    False -> Ok(log2(x))
+  }
+}
+
+/// Log base 10 with domain check. Returns `Error(Nil)` for `x ≤ 0`.
+pub fn try_log10(x: Float) -> Result(Float, Nil) {
+  case x <=. 0.0 {
+    True -> Error(Nil)
+    False -> Ok(log10(x))
+  }
+}
+
+/// Square root with domain check. Returns `Error(Nil)` for `x < 0`.
+pub fn try_sqrt(x: Float) -> Result(Float, Nil) {
+  case x <. 0.0 {
+    True -> Error(Nil)
+    False -> Ok(sqrt(x))
+  }
+}
+
+/// Real cube root, defined for all `x` via `sign(x) · |x|^(1/3)`.
+pub fn cbrt(x: Float) -> Float {
+  case x {
+    x if x >. 0.0 -> pow(x, 1.0 /. 3.0)
+    x if x <. 0.0 -> 0.0 -. pow(0.0 -. x, 1.0 /. 3.0)
+    _ -> 0.0
+  }
+}
+
+/// Real cube root with `Result` API for parity with `try_sqrt`.
+/// Total over `Float`, so `Ok` always; kept for ergonomic chaining.
+pub fn try_cbrt(x: Float) -> Result(Float, Nil) {
+  Ok(cbrt(x))
+}
+
+/// Generalised real `n`-th root (`x^(1/n)`) for integer `n ≥ 1`.
+///
+/// - `n = 1` → returns `Ok(x)`.
+/// - `n = 2` → uses `sqrt` (errors for `x < 0`).
+/// - Odd `n` → defined for all real `x` (sign trick).
+/// - Even `n > 2` → errors for `x < 0`; uses `pow(x, 1/n)` otherwise.
+/// - `n ≤ 0` → `Error(Nil)`.
+pub fn try_nth_root(x: Float, n: Int) -> Result(Float, Nil) {
+  case n {
+    n if n <= 0 -> Error(Nil)
+    1 -> Ok(x)
+    2 -> try_sqrt(x)
+    n -> {
+      let is_odd = n % 2 != 0
+      case x <. 0.0, is_odd {
+        True, False -> Error(Nil)
+        True, True -> Ok(0.0 -. pow(0.0 -. x, 1.0 /. int_to_float_local(n)))
+        False, _ -> Ok(pow(x, 1.0 /. int_to_float_local(n)))
+      }
+    }
+  }
+}
+
+@external(erlang, "erlang", "float")
+fn int_to_float_local(n: Int) -> Float
 
 // ============================================================================
 // Safe variants - bounded against NaN / overflow
@@ -357,8 +466,9 @@ pub fn iglu_approx(x: Float, sigma: Float) -> Float {
   x *. gate
 }
 
+/// Single-argument arctangent. Delegates to `:math.atan/1`.
 @external(erlang, "math", "atan")
-fn atan(x: Float) -> Float
+pub fn atan(x: Float) -> Float
 
 fn inv_pi() -> Float {
   constants.inv_pi
