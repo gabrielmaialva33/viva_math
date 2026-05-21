@@ -206,15 +206,80 @@ Codex GPT-5.5 audit cross-checked against `gleam-lang/stdlib`,
   Beal (2003) and Bishop (2006) which are the actual papers driving the
   variational block added in 1.2.102.
 
+### Test coverage — 5 previously untested modules
+
+Codex GPT-5.5 coverage audit identified 5 public modules with **zero direct
+tests**: `autodiff`, `autodiff_reverse`, `matrix_dense`, `tdigest`, `special`.
+Closed-form derivative identities (Lyness, dual numbers), algebraic invariants
+(identity laws, transpose involution), and tabulated reference values
+(Γ(n)=(n-1)!, B(2,3)=1/12, ψ(1)=−γ) used as anchors per the AD validation
+literature (Birthe van den Berg et al. 2024; Mazza & Pagani 2022; Dunning &
+Ertl 2019).
+
+- **`test/autodiff_test.gleam`** (28 tests) — forward-mode AD: arithmetic
+  derivatives via Leibniz, transcendentals via chain rule, `Dual3`
+  multivariate gradient (`∇(x²+y²+z²) = (2x,2y,2z)`, `∇(xyz)`,
+  `∇exp(x+y+z)`), `jacobian` of linear maps, `lift1` chain-rule wrapper,
+  `gelu` at 0.
+- **`test/autodiff_reverse_test.gleam`** (16 tests) — reverse-mode AD on
+  the computation tape: every elementary op, cross-mode consistency with
+  forward AD, multi-input `gradients/2`, **gradient accumulation on reused
+  nodes** (defends a classic reverse-AD failure mode where the backward
+  pass walks only one path through a shared intermediate).
+- **`test/matrix_dense_test.gleam`** (17 tests) — `BitArray` dense matrix:
+  shape constructors + invalid-dim errors, identity matrix diagonal,
+  `from_list` round-trip, algebraic identities (A+0=A, A−A=0, (Aᵀ)ᵀ=A,
+  I·A=A, A·I=A), `frobenius` on tabulated 3-4-5 triangle, `trace(I_n)=n`,
+  `byte_size` arithmetic.
+- **`test/tdigest_test.gleam`** (14 tests) — streaming quantile estimator:
+  weight conservation across `insert`/`insert_all`/`insert_weighted`,
+  boundary queries (`quantile(0)=min`, `quantile(1)=max`, out-of-range
+  rejection), median accuracy on uniform [1..100] (loose tolerance per
+  t-digest centre-vs-tail trade-off), `merge` mass + extrema preservation,
+  monotonic quantile property.
+- **`test/special_test.gleam`** (25 tests) — Lanczos `gamma`/`lgamma`,
+  `digamma`, `beta`, `lbeta`, `factorial`, `binomial`: tabulated values
+  (Γ(½)=√π, Γ(3/2)=½·√π, ψ(1)=−γ, ψ(2)=1−γ), Beta symmetry, factorial
+  exactness vs Γ(n+1), binomial Pascal identities + edge cases. Documents
+  that `binomial(n, k) = Ok(0.0)` for `k > n` (no combinations) and
+  `Error(Nil)` for `k < 0` (invalid).
+
+### Added — Documentation pass
+
+Closed the docstring gap identified by the audit: every `pub fn` / `pub
+type` in `viva_math/autodiff.gleam` (22 items) and
+`viva_math/autodiff_reverse.gleam` (14 items) now carries a `///` comment
+stating the **local derivative rule** it implements (e.g., `mul: ∂z/∂a = b,
+∂z/∂b = a`). `viva_math/matrix_dense.DenseMat` documents its shape
+invariant. The audit confirmed `tdigest` and `special` already had complete
+public docstrings.
+
 ### Validated
 
-- 333 tests passing (was 326 → +7; +53 vs 1.2.101).
+- **436 tests passing** (was 333 → +103; +156 vs 1.2.101).
 - `gleam format --check src test` clean.
-- Test files now: `viva_math_test.gleam` (945L, legacy domain blocks),
-  `ou_test.gleam` (110L), `transport_test.gleam` (67L),
-  `free_energy_variational_test.gleam` (139L), `test_support.gleam` (50L),
-  plus the pre-existing `fft_test`, `precision_test`, `property_test`,
-  `qcheck_test`, `sota_test`.
+- `gleam check` clean.
+
+### Test files (current)
+
+```
+test/
+├── test_support.gleam                    (shared helpers)
+├── autodiff_test.gleam                   (28 tests, new)
+├── autodiff_reverse_test.gleam           (16 tests, new)
+├── matrix_dense_test.gleam               (17 tests, new)
+├── tdigest_test.gleam                    (14 tests, new)
+├── special_test.gleam                    (25 tests, new)
+├── ou_test.gleam                         (11 tests)
+├── transport_test.gleam                  (8 tests)
+├── free_energy_variational_test.gleam    (14 tests)
+├── viva_math_test.gleam                  (legacy per-domain blocks)
+├── fft_test.gleam
+├── precision_test.gleam
+├── property_test.gleam
+├── qcheck_test.gleam
+└── sota_test.gleam
+```
 
 ## [1.2.101] - 2026-05-21
 
