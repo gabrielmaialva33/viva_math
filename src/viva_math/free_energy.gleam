@@ -16,7 +16,8 @@
 //// References:
 //// - Friston (2010) "The free-energy principle: a unified brain theory?"
 //// - Parr & Friston (2019) "Generalised free energy and active inference"
-//// - Validated by DeepSeek R1 671B (2025)
+//// - Beal (2003) "Variational Algorithms for Approximate Bayesian Inference"
+//// - Bishop (2006) "Pattern Recognition and Machine Learning", ch. 10
 
 import gleam/float
 import gleam/list
