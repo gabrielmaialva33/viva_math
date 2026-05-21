@@ -130,7 +130,12 @@ pub fn row(m: DenseMat, row_idx: Int) -> Result(List(Float), Nil) {
   }
 }
 
-fn extract_row(m: DenseMat, row_idx: Int, col_idx: Int, acc: List(Float)) -> List(Float) {
+fn extract_row(
+  m: DenseMat,
+  row_idx: Int,
+  col_idx: Int,
+  acc: List(Float),
+) -> List(Float) {
   case col_idx >= m.cols {
     True -> list.reverse(acc)
     False ->
@@ -146,7 +151,11 @@ pub fn to_rows(m: DenseMat) -> List(List(Float)) {
   build_rows(m, 0, [])
 }
 
-fn build_rows(m: DenseMat, i: Int, acc: List(List(Float))) -> List(List(Float)) {
+fn build_rows(
+  m: DenseMat,
+  i: Int,
+  acc: List(List(Float)),
+) -> List(List(Float)) {
   case i >= m.rows {
     True -> list.reverse(acc)
     False ->
@@ -199,7 +208,11 @@ pub fn scale(m: DenseMat, s: Float) -> DenseMat {
   DenseMat(rows: m.rows, cols: m.cols, data: new_data)
 }
 
-fn zip_with(a: DenseMat, b: DenseMat, f: fn(Float, Float) -> Float) -> DenseMat {
+fn zip_with(
+  a: DenseMat,
+  b: DenseMat,
+  f: fn(Float, Float) -> Float,
+) -> DenseMat {
   let new_data = zip_data(a.data, b.data, f, <<>>)
   DenseMat(rows: a.rows, cols: a.cols, data: new_data)
 }
@@ -220,7 +233,8 @@ fn zip_data(
 ) -> BitArray {
   case a, b {
     <<x:float-little-size(64), arest:bits>>,
-      <<y:float-little-size(64), brest:bits>> ->
+      <<y:float-little-size(64), brest:bits>>
+    ->
       zip_data(arest, brest, f, <<acc:bits, { f(x, y) }:float-little-size(64)>>)
     _, _ -> acc
   }
@@ -236,7 +250,12 @@ pub fn transpose(m: DenseMat) -> DenseMat {
   DenseMat(rows: m.cols, cols: m.rows, data: new_data)
 }
 
-fn transpose_loop(m: DenseMat, new_row: Int, new_col: Int, acc: BitArray) -> BitArray {
+fn transpose_loop(
+  m: DenseMat,
+  new_row: Int,
+  new_col: Int,
+  acc: BitArray,
+) -> BitArray {
   case new_row >= m.cols {
     True -> acc
     False -> {
@@ -267,7 +286,13 @@ pub fn mul(a: DenseMat, b: DenseMat) -> Result(DenseMat, Nil) {
   }
 }
 
-fn matmul_loop(a: DenseMat, b: DenseMat, i: Int, j: Int, acc: BitArray) -> BitArray {
+fn matmul_loop(
+  a: DenseMat,
+  b: DenseMat,
+  i: Int,
+  j: Int,
+  acc: BitArray,
+) -> BitArray {
   case i >= a.rows {
     True -> acc
     False -> {
@@ -312,8 +337,7 @@ pub fn frobenius(m: DenseMat) -> Float {
 
 fn sum_squared(data: BitArray, acc: Float) -> Float {
   case data {
-    <<x:float-little-size(64), rest:bits>> ->
-      sum_squared(rest, acc +. x *. x)
+    <<x:float-little-size(64), rest:bits>> -> sum_squared(rest, acc +. x *. x)
     _ -> acc
   }
 }
