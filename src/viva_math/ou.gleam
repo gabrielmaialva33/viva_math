@@ -122,6 +122,9 @@ pub fn step(
 ///
 /// Returns the trajectory **excluding** the initial point (length `n`) and the
 /// final seed for chaining.
+///
+/// Pre-computes the transition kernel (`decay`, `std`) once — the loop only
+/// does a multiply-add and a normal draw per step.
 pub fn simulate(
   params: OUParams1D,
   x0: Float,
@@ -129,14 +132,26 @@ pub fn simulate(
   n: Int,
   seed: Seed,
 ) -> #(List(Float), Seed) {
-  let #(traj, s) = simulate_loop(params, x0, dt, n, seed, [])
+  let OUParams1D(theta, mu, sigma) = params
+  let decay = scalar.exp(0.0 -. theta *. dt)
+  let var_term =
+    sigma
+    *. sigma
+    *. { 0.0 -. scalar.expm1(0.0 -. 2.0 *. theta *. dt) }
+    /. { 2.0 *. theta }
+  let std_term = case float.square_root(var_term) {
+    Ok(s) -> s
+    Error(_) -> 0.0
+  }
+  let #(traj, s) = simulate_loop(decay, mu, std_term, x0, n, seed, [])
   #(list.reverse(traj), s)
 }
 
 fn simulate_loop(
-  params: OUParams1D,
+  decay: Float,
+  mu: Float,
+  std: Float,
   x: Float,
-  dt: Float,
   n: Int,
   seed: Seed,
   acc: List(Float),
@@ -144,8 +159,9 @@ fn simulate_loop(
   case n <= 0 {
     True -> #(acc, seed)
     False -> {
-      let #(x_next, s_next) = step(params, x, dt, seed)
-      simulate_loop(params, x_next, dt, n - 1, s_next, [x_next, ..acc])
+      let #(z, s_next) = random.standard_normal(seed)
+      let x_next = mu +. { x -. mu } *. decay +. std *. z
+      simulate_loop(decay, mu, std, x_next, n - 1, s_next, [x_next, ..acc])
     }
   }
 }
@@ -235,6 +251,9 @@ pub fn step_vec3(
 }
 
 /// Simulate Vec3 trajectory. Returns `n` Vec3 points excluding initial.
+///
+/// Pre-computes the three componentwise transition kernels once — the loop
+/// only does multiply-adds and three normal draws per step.
 pub fn simulate_vec3(
   params: OUParamsVec3,
   x0: Vec3,
@@ -242,14 +261,39 @@ pub fn simulate_vec3(
   n: Int,
   seed: Seed,
 ) -> #(List(Vec3), Seed) {
-  let #(traj, s) = simulate_vec3_loop(params, x0, dt, n, seed, [])
+  let OUParamsVec3(th, mu, sg) = params
+  let kx = build_kernel(th.x, sg.x, dt)
+  let ky = build_kernel(th.y, sg.y, dt)
+  let kz = build_kernel(th.z, sg.z, dt)
+  let #(traj, s) = simulate_vec3_loop(kx, ky, kz, mu, x0, n, seed, [])
   #(list.reverse(traj), s)
 }
 
+/// Pre-computed scalar OU kernel `(decay, std)` for one axis.
+type Kernel {
+  Kernel(decay: Float, std: Float)
+}
+
+fn build_kernel(theta: Float, sigma: Float, dt: Float) -> Kernel {
+  let decay = scalar.exp(0.0 -. theta *. dt)
+  let var_term =
+    sigma
+    *. sigma
+    *. { 0.0 -. scalar.expm1(0.0 -. 2.0 *. theta *. dt) }
+    /. { 2.0 *. theta }
+  let std = case float.square_root(var_term) {
+    Ok(s) -> s
+    Error(_) -> 0.0
+  }
+  Kernel(decay: decay, std: std)
+}
+
 fn simulate_vec3_loop(
-  params: OUParamsVec3,
+  kx: Kernel,
+  ky: Kernel,
+  kz: Kernel,
+  mu: Vec3,
   x: Vec3,
-  dt: Float,
   n: Int,
   seed: Seed,
   acc: List(Vec3),
@@ -257,8 +301,14 @@ fn simulate_vec3_loop(
   case n <= 0 {
     True -> #(acc, seed)
     False -> {
-      let #(x_next, s_next) = step_vec3(params, x, dt, seed)
-      simulate_vec3_loop(params, x_next, dt, n - 1, s_next, [x_next, ..acc])
+      let #(zx, s1) = random.standard_normal(seed)
+      let #(zy, s2) = random.standard_normal(s1)
+      let #(zz, s3) = random.standard_normal(s2)
+      let nx = mu.x +. { x.x -. mu.x } *. kx.decay +. kx.std *. zx
+      let ny = mu.y +. { x.y -. mu.y } *. ky.decay +. ky.std *. zy
+      let nz = mu.z +. { x.z -. mu.z } *. kz.decay +. kz.std *. zz
+      let x_next = vector.Vec3(nx, ny, nz)
+      simulate_vec3_loop(kx, ky, kz, mu, x_next, n - 1, s3, [x_next, ..acc])
     }
   }
 }
