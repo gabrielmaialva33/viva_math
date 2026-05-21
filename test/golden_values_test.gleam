@@ -37,10 +37,8 @@ pub fn special_golden_values_test() {
   |> is_close_hybrid(12.801_827_480_081_469, tight, tight)
   |> should.be_true
 
-  // AUDIT NEEDED: current asymptotic-series implementation is ~1.2e-10 above
-  // the tabulated value at psi(5); keep the golden check visible.
   special.digamma(5.0)
-  |> is_close_hybrid(1.506_117_668_431_800_5, 2.0e-10, 2.0e-10)
+  |> is_close_hybrid(1.506_117_668_431_800_5, 1.0e-12, 1.0e-12)
   |> should.be_true
 }
 
