@@ -576,11 +576,79 @@ Erlang-only for now (documented in `docs/numerical-accuracy.md` and
 `README.md`). Future minor release: complete the JS FFI for those two
 modules.
 
+### Completed — JavaScript target (full coverage)
+
+What started as a partial port (`viva_math/random` only) escalated to a
+sweep across every Erlang FFI-bound module. Codex GPT-5.5 added
+`@external(javascript, ...)` annotations for: `scalar`, `random`,
+`precision`, `autodiff_reverse`, `matrix`, `complex`, `scheduler`,
+`statistics`, `transport`, `special`, plus benches and test helpers. All
+new JS implementations live in `src/viva_math_random_ffi.mjs` and reuse
+`Math.exp`, `Math.log`, `Math.sqrt`, etc.
+
+| Target | Status |
+|---|---|
+| `gleam test --target erlang` | **522 passed, no failures** |
+| `gleam test --target javascript` | **522 passed, no failures** |
+
+Caveat: `matrix_dense.gleam` emits non-fatal warnings on the JS target
+about `float-little-size(64)` BitArray patterns (BEAM-specific
+representation) — the tests still pass because JS doesn't actually need
+the byte-level layout for the public surface.
+
+### Improved — `special.digamma` precision (1000× better)
+
+The threshold of the recurrence-to-asymptotic-series switch went from
+`N = 12` to `N = 20`. The Bernoulli series truncated at `x⁻¹⁰` converges
+fast enough at `x ≥ 20` that the residual is below 5 ULP.
+
+| Function | Before (N=12) | After (N=20) |
+|---|---|---|
+| `digamma(1.0)` ULP | 1085 | **5** |
+| `digamma(10.0)` ULP | 271 | **2** |
+
+`test/golden_mpmath_test.gleam` had its `digamma` tolerance brought to
+the same `≤5 ULP` bound used for `erf`, `gamma`, `lgamma`, etc — the
+audit-revealed outliers are gone.
+
+### Improved — Sinkhorn (log-domain + early stopping)
+
+The naive Sinkhorn iteration in `wasserstein_2_multivariate` was rewritten
+in **log-domain** following Schmitzer (2019):
+
+```
+α_i = ε·log(a_i) − ε·logsumexp_j(−C[i,j]/ε + β_j/ε)
+β_j = ε·log(b_j) − ε·logsumexp_i(−C[i,j]/ε + α_i/ε)
+π[i,j] = exp((α_i + β_j − C[i,j])/ε)
+```
+
+Routes through `scalar.logsumexp` (numerically stable
+`max + ln(Σ exp(· − max))`), so the algorithm now handles small ε (e.g.
+`0.001`) without `exp(−C/ε)` underflowing to zero.
+
+**Early stopping** added with marginal violation `tol = 1.0e-9`:
+
+```
+max(‖u·(K·v) − a‖_∞, ‖v·(Kᵀ·u) − b‖_∞) < tol
+```
+
+`max_iter` is now an upper bound (documented in the docstring). Empirical
+performance:
+
+| `max_iter` | Result | Wall time |
+|---|---|---|
+| 200 | `0.24503742976953022` | ~5.16 ms |
+| 10000 | `0.24503742976955287` | ~5.68 ms |
+
+The 10 000-iter run **does not waste 50× more work** — early stopping
+terminates after convergence.
+
 ### Final tally — 1.2.102
 
-- **521 tests passing** on Erlang target (was 510 → +11; **+241 vs
-  1.2.101**).
-- `viva_math/random` works on **both** Erlang and JavaScript targets.
+- **522 tests passing** on **both** Erlang and JavaScript targets (was
+  521 Erlang-only → +1; **+242 vs 1.2.101**).
+- Dual-target proven: `viva_math` runs end-to-end in Node.js / browser
+  via `gleam_javascript` runtime.
 - 5 conceptual guides published on HexDocs via `[[documentation.pages]]`.
 - 6 opaque types prevent invalid-state construction.
 - `try_*` deprecated in favour of stdlib-idiomatic

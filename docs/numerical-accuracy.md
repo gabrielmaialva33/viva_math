@@ -46,7 +46,7 @@ is_close_ulp(a, b, max_ulps)    // ULP-bounded comparison
 | `special.digamma(5)` | golden value (post-1.2.102 fix) | `1e-12` | `golden_values_test.gleam` |
 | `scalar.{erf,exp,ln,sin,cos}` | mpmath 100-bit references | ≤ 5 ULP | `golden_mpmath_test.gleam` |
 | `special.{gamma,lgamma}` | mpmath 100-bit references | ≤ 5 ULP except `gamma(5.5)` at 8 ULP | `golden_mpmath_test.gleam` |
-| `special.digamma` | mpmath 100-bit references | 1100 ULP at `1.0`, 300 ULP at `10.0` | `golden_mpmath_test.gleam` |
+| `special.digamma` | mpmath 100-bit references | ≤ 5 ULP | `golden_mpmath_test.gleam` |
 | `special.Γ(x+1) = x·Γ(x)` | recurrence | `1e-10` rel | `identities_test.gleam` |
 | `special.ψ(x+1) = ψ(x) + 1/x` | recurrence | `1e-7` abs | `identities_test.gleam` |
 | `special.lbeta(x,y) = lgamma decomp` | decomposition | `1e-12` | `identities_test.gleam` |
@@ -60,33 +60,34 @@ is_close_ulp(a, b, max_ulps)    // ULP-bounded comparison
 The asymptotic series for `ψ(x)` converges faster as `x` grows. The
 recurrence `ψ(x) = ψ(x+1) − 1/x` is used to push `x ≥ N` before invoking
 the series. The threshold was raised in 1.2.102 from `N = 6` to `N = 12`,
-which reduces the error by **~1000×** at no measurable runtime cost.
+then to `N = 20`, which removes the previous mpmath-reference exceptions
+without adding extra Bernoulli terms.
 
-| `x` | Before (N=6) | After (N=12) |
-|---|---|---|
-| `5.0` | `1.17e-10` | `1.20e-13` |
+| `x` | Before (N=6) | After (N=12) | After (N=20) |
+|---|---|---|---|
+| `1.0` | not measured | 1085 ULP | 5 ULP |
+| `5.0` | `1.17e-10` | `1.20e-13` | ≤ `1e-12` abs |
+| `10.0` | not measured | 271 ULP | 2 ULP |
 
 Test `golden_values_test.special_golden_values_test` was tightened from
-`2e-10` to `1e-12` in the same release.
-
-The ULP-based mpmath references added after 1.2.102 show that `digamma`
-is still materially less accurate than the libm-backed scalar functions:
-`digamma(1.0)` is currently 1085 ULP from the 100-bit mpmath reference and
-`digamma(10.0)` is 271 ULP away.
+`2e-10` to `1e-12` in the same release. The ULP-based mpmath references now
+hold at ≤ 5 ULP for the exercised `digamma` points.
 
 ## JavaScript target status
 
 The package is configured without a fixed `target` so Erlang remains the
-default while JavaScript compilation can be attempted. JavaScript support is
-partial as of this release:
+default while JavaScript can be tested explicitly. Full-package
+`gleam test --target javascript` passes as of 1.2.102.
 
 - `viva_math/random` has a JavaScript FFI backed by Mulberry32 plus
   Box-Muller normal sampling. `jump` is a no-op on JavaScript.
 - `test/test_support` has JavaScript ULP FFI for golden-value tests.
-- Full-package `gleam test --target javascript` does not yet compile because
-  existing modules still contain Erlang-only externals, first observed in
-  `viva_math/autodiff_reverse` (`exp_f`, `ln_f`, `sin_f`, `cos_f`, `tanh_f`,
-  `pow_f`) and `viva_math/precision` (`int_to_float`, `sqrt`).
+- Erlang `:math` wrappers are mirrored to JavaScript `Math` functions where
+  available. `erf`/`erfc` use a Cephes-style rational approximation in the
+  shared JavaScript FFI.
+- JavaScript compilation still warns for `matrix_dense` bit-array segments
+  using `float-little-size(64)` because JavaScript numbers expose 52 integer
+  precision bits in this representation.
 
 ## Cusp catastrophe
 
@@ -119,7 +120,8 @@ are routed through stable identities:
 
 - Subnormal-number behaviour of every transcendental (most exercised
   edge case is `1e-10` for cancellation; full subnormal range is roadmap).
-- JavaScript target parity for all Erlang FFI-backed modules.
+- Subnormal-number behaviour and `matrix_dense` JavaScript bit-array warning
+  resolution.
 
 ## References
 

@@ -7,7 +7,8 @@
 [![Erlang+JS](https://img.shields.io/badge/Erlang_%2B_JS-4B275F?style=for-the-badge)](https://gleam.run/news/multi-target-compilation/)
 [![Hex](https://img.shields.io/badge/hex.pm-viva__math-A678DD?style=for-the-badge&logo=hex&logoColor=white)](https://hex.pm/packages/viva_math)
 [![PAD](https://img.shields.io/badge/PAD-Mehrabian_1996-7C3AED?style=for-the-badge)](https://en.wikipedia.org/wiki/PAD_emotional_state_model)
-[![Tests](https://img.shields.io/badge/tests-521_passing-00875A?style=for-the-badge)](./test)
+[![Tests](https://img.shields.io/badge/tests-522_passing-00875A?style=for-the-badge)](./test)
+[![Targets](https://img.shields.io/badge/targets-Erlang_%2B_JS-4B275F?style=for-the-badge)](./gleam.toml)
 [![Version](https://img.shields.io/badge/version-1.2.102-CD5C5C?style=for-the-badge)](./CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/docs-hexdocs-7C3AED?style=for-the-badge)](https://hexdocs.pm/viva_math)
 [![License](https://img.shields.io/badge/license-MIT-228B22?style=for-the-badge)](./LICENSE)
@@ -46,9 +47,9 @@ Thom 1972, Friston 2010, Shannon 1948).
 | Property       | Value                                                          |
 |:---------------|:---------------------------------------------------------------|
 | **Language**   | Pure Gleam (type-safe functional)                                                                                 |
-| **Target**     | Erlang (BEAM)                                                                                                     |
+| **Targets**    | Erlang (BEAM) + JavaScript                                                                                        |
 | **Runtime deps** | `gleam_stdlib` only                                                                                             |
-| **Tests**      | 521 passing (Erlang); `viva_math/random` also works on JavaScript                                                 |
+| **Tests**      | 522 passing on **both** Erlang and JavaScript targets                                                             |
 | **Domain**     | Affective computing, dynamical systems, info theory, optimal transport                                            |
 | **Public API** | `viva_math/{scalar,common,vector,cusp,free_energy,attractor,entropy,ou,transport,ode,statistics,distributions,…}` |
 
@@ -317,10 +318,10 @@ Conceptual guides published alongside the API reference on
 | Variational Free Energy (deeper Bayesian model)      |   ✅    |
 | Wasserstein distance between affective distributions |   ✅    |
 | Property-based tests on every closed form            |   ✅    |
-| Multivariate Wasserstein (Sinkhorn-Knopp)            |   ✅    |
+| Multivariate Wasserstein (log-domain Sinkhorn + early stop) | ✅ |
 | ULP-by-ULP `mpmath` reference validation             |   ✅    |
-| JavaScript target — `viva_math/random` only          |   🟡    |
-| JavaScript target — full coverage (`precision`, `autodiff_reverse`) | ⏳ |
+| JavaScript target — full module coverage             |   ✅    |
+| `digamma` ≤5 ULP precision                           |   ✅    |
 
 ---
 
@@ -328,7 +329,8 @@ Conceptual guides published alongside the API reference on
 
 ```bash
 git checkout -b feature/your-feature
-gleam test                  # 521 tests (Erlang)
+gleam test                            # 522 tests (Erlang, default)
+gleam test --target javascript        # 522 tests (JavaScript)
 gleam format --check src test
 gleam docs build
 ```
